@@ -34,9 +34,9 @@ def read(path: os.PathLike):
     return frames
 
 
-def save(path: os.PathLike, frames):
+def save(path: os.PathLike, array):
     with Path(path).open(mode = 'wb') as file:
-        np.save(file, frames)
+        np.save(file, array)
 
 
 def load(path: os.PathLike):
