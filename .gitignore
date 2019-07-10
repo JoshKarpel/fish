@@ -103,4 +103,10 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# editor config
 .idea/
+
+# input/output files
+*.mp4
+*.avi
+*.npy
