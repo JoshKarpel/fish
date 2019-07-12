@@ -91,5 +91,8 @@ def make_movie(path, frames, num_frames: Optional[int] = None, fps = 30,):
 
     writer.release()
 
-    path.unlink()
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
     tmp_path.rename(path)
