@@ -35,8 +35,12 @@ def read(path: os.PathLike):
 
 
 def save(path: os.PathLike, array):
-    with Path(path).open(mode = 'wb') as file:
+    path =Path(path)
+    tmp_path = path.with_suffix('.working')
+    with tmp_path.open(mode = 'wb') as file:
         np.save(file, array)
+
+    tmp_path.rename(path)
 
 
 def load(path: os.PathLike):
@@ -70,7 +74,7 @@ def display(frames, wait: int = 0):
 
 
 def make_movie(path, frames, num_frames: Optional[int] = None, fps = 30,):
-    path = Path(path)
+    path = Path(path).with_suffix('.mp4')
     path.parent.mkdir(parents = True, exist_ok = True)
 
     tmp_path = path.with_suffix('.working' + path.suffix)
@@ -79,11 +83,13 @@ def make_movie(path, frames, num_frames: Optional[int] = None, fps = 30,):
     for frame in tqdm(frames, total = num_frames, desc = f'Writing frames to {path}'):
         if writer is None:
             height, width = frame.shape[:2]
+            color = len(frame.shape) == 3
             fourcc = cv.VideoWriter_fourcc(*'mp4v')  # Be sure to use lower case
-            writer = cv.VideoWriter(str(tmp_path), fourcc, float(fps), (width, height), isColor = False)
+            writer = cv.VideoWriter(str(tmp_path), fourcc, float(fps), (width, height), isColor = color)
 
         writer.write(frame)
 
     writer.release()
 
+    path.unlink()
     tmp_path.rename(path)
