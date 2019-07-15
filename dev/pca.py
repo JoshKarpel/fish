@@ -83,6 +83,9 @@ def do_pca(vector_stack, pca_dimensions):
     return pca
 
 
+# anything from here will work
+# https://scikit-learn.org/stable/modules/clustering.html
+# todo: switch on these from higher-level code
 def do_clustering(transformed_vector_stack, clusters):
     kmeans = MiniBatchKMeans(n_clusters = clusters)
     kmeans.fit(transformed_vector_stack)
@@ -130,10 +133,16 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
     vector_stack = stack_vectors(sorted_vectors_from_frames(frames))
 
     pca = do_pca(vector_stack, pca_dimensions)
-    transformed_vector_stack = pca.transform(vector_stack)
+    print('Transforming vectors...')
+    with fish.BlockTimer() as timer:
+        transformed_vector_stack = pca.transform(vector_stack)
+    print(timer)
+    print('Transformed vectors')
 
     print('Clustering...')
-    clusterer = do_clustering(transformed_vector_stack, clusters)
+    with fish.BlockTimer() as timer:
+        clusterer = do_clustering(transformed_vector_stack, clusters)
+    print(timer)
     print('Done clustering')
 
     labelled_frames = label_chunks_in_frames(frames, pca, clusterer)
