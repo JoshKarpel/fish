@@ -62,7 +62,7 @@ def visualize_chunks_and_vectors(frames):
             plt.show()
 
 
-def batches_of_vectors_for_pca(stacked, batch_size = 100):
+def make_batches_of_vectors(stacked, batch_size = 100):
     full, last = divmod(len(stacked), batch_size)
     return full + (1 if last != 0 else 0), _make_batches(stacked, batch_size, full, last)
 
@@ -75,7 +75,7 @@ def _make_batches(stacked, batch_size, full, last):
 
 
 def do_pca(vector_stack, pca_dimensions):
-    num_batches, batches = batches_of_vectors_for_pca(vector_stack, batch_size = 100)
+    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size = 100)
     pca = IncrementalPCA(n_components = pca_dimensions)
     for batch in tqdm(batches, total = num_batches, desc = 'Performing PCA'):
         pca.partial_fit(batch)
@@ -86,9 +86,12 @@ def do_pca(vector_stack, pca_dimensions):
 # anything from here will work
 # https://scikit-learn.org/stable/modules/clustering.html
 # todo: switch on these from higher-level code
-def do_clustering(transformed_vector_stack, clusters):
+def do_clustering(vector_stack, pca, clusters):
+    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size = 100)
+
     kmeans = MiniBatchKMeans(n_clusters = clusters)
-    kmeans.fit(transformed_vector_stack)
+    for batch in tqdm(batches, total = num_batches, desc = 'Performing Clustering'):
+        kmeans.partial_fit(pca.transform(batch))
 
     return kmeans
 
@@ -107,6 +110,7 @@ def label_chunks_in_frames(frames, pca, clusterer):
             coords.append((v, h))
             vecs.append(chunk_to_sorted_vector(chunk).reshape((1, -1)))
 
+        # it's more efficient to stack up all the vectors, then transform them
         vec_stack = stack_vectors(vecs)
         transformed = pca.transform(vec_stack)
         labels = clusterer.predict(transformed)
@@ -133,17 +137,7 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
     vector_stack = stack_vectors(sorted_vectors_from_frames(frames))
 
     pca = do_pca(vector_stack, pca_dimensions)
-    print('Transforming vectors...')
-    with fish.BlockTimer() as timer:
-        transformed_vector_stack = pca.transform(vector_stack)
-    print(timer)
-    print('Transformed vectors')
-
-    print('Clustering...')
-    with fish.BlockTimer() as timer:
-        clusterer = do_clustering(transformed_vector_stack, clusters)
-    print(timer)
-    print('Done clustering')
+    clusterer = do_clustering(vector_stack, pca, clusters)
 
     labelled_frames = label_chunks_in_frames(frames, pca, clusterer)
 
@@ -158,8 +152,8 @@ if __name__ == '__main__':
     IN = Path.cwd() / 'data'
     OUT = Path.cwd() / 'out'
 
-    dimensions = [2, 5, 10]
-    clusters = [2, 4, 8]
+    dimensions = [5]
+    clusters = [4]
     for dims, clus in itertools.product(dimensions, clusters):
         label_movie(
             input_movie = IN / 'control.avi',
