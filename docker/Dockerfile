@@ -2,7 +2,7 @@ FROM htcondor/htmap-exec:v0.4.1
 
 USER root
 
-RUN conda install -y opencv \
+RUN conda install -y opencv scikit-learn scikit-image \
  && conda clean -y --all
 
 ARG CACHEBUST=1

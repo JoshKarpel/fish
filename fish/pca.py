@@ -131,6 +131,7 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
 
     frames = io.read(input_movie)
     frames = frames[skip_frames:]
+    len_frames = len(frames)
     if remove_background:
         frames = bgnd.remove_background(frames, threshold = background_threshold)
 
@@ -144,6 +145,6 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
     io.make_movie(
         output_path,
         labelled_frames,
-        num_frames = len(frames),
+        num_frames = len_frames,
     )
 
