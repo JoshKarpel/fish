@@ -11,7 +11,7 @@ import htmap
     request_memory = '8GB',
 ))
 def label_movie(movie, dimensions, clusters, remove_background = False, skip_frames = 0):
-    op = f'{movie}__dims={dimensions}_clusters={clusters}_rmv={remove_background}.mp4'
+    op = f'{movie}__dims={dimensions}_clusters={clusters}_rmv={remove_background}_skip={skip_frames}.mp4'
 
     fish.label_movie(
         input_movie = f'{movie}.avi',
