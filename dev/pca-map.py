@@ -10,7 +10,7 @@ import htmap
     request_disk = '10GB',
     request_memory = '8GB',
 ))
-def label_movie(movie, dimensions, clusters, remove_background = False):
+def label_movie(movie, dimensions, clusters, remove_background = False, skip_frames = 0):
     op = f'{movie}__dims={dimensions}_clusters={clusters}_rmv={remove_background}.mp4'
 
     fish.label_movie(
@@ -19,6 +19,7 @@ def label_movie(movie, dimensions, clusters, remove_background = False):
         pca_dimensions = dimensions,
         clusters = clusters,
         remove_background = remove_background,
+        skip_frames = skip_frames,
     )
 
     htmap.transfer_output_files(op)
@@ -34,6 +35,7 @@ if __name__ == '__main__':
     dimensions = [2, 5, 10]
     clusters = [2, 4, 8]
     remove_bgnds = [False, True]
+    skips = [0, 100]
 
     for movie in movies:
         with label_movie.build_map(
@@ -42,8 +44,8 @@ if __name__ == '__main__':
                 fixed_input_files = [f'http://proxy.chtc.wisc.edu/SQUID/karpel/{movie}.avi']
             )
         ) as mb:
-            for dim, clu, rmv in itertools.product(dimensions, clusters, remove_bgnds):
-                mb(movie, dim, clu, remove_background = rmv)
+            for dim, clu, rmv, skip in itertools.product(dimensions, clusters, remove_bgnds, skips):
+                mb(movie, dim, clu, remove_background = rmv, skip_frames = skip)
 
         map = mb.map
         print(f'Submitted {map} with {len(map)} jobs')

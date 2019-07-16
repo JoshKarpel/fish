@@ -130,7 +130,6 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
         raise Exception(f"Not enough colors to label {clusters} clusters (have {len(COLORS)} colors)")
 
     frames = io.read(input_movie)[skip_frames:]
-    len_frames = len(frames)
     if remove_background:
         frames = np.stack(bgnd.remove_background(frames, threshold = background_threshold), axis = 0)
 
@@ -143,6 +142,6 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
     io.make_movie(
         output_path,
         labelled_frames,
-        num_frames = len_frames,
+        num_frames = len(frames),
     )
 
