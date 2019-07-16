@@ -129,14 +129,12 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
     if clusters > len(COLORS):
         raise Exception(f"Not enough colors to label {clusters} clusters (have {len(COLORS)} colors)")
 
-    frames = io.read(input_movie)
-    frames = frames[skip_frames:]
+    frames = io.read(input_movie)[skip_frames:]
     len_frames = len(frames)
     if remove_background:
-        frames = list(bgnd.remove_background(frames, threshold = background_threshold))
+        frames = np.stack(bgnd.remove_background(frames, threshold = background_threshold), axis = 0)
 
     vector_stack = stack_vectors(sorted_vectors_from_frames(frames))
-
     pca = do_pca(vector_stack, pca_dimensions)
     clusterer = do_clustering(vector_stack, pca, clusters)
 
