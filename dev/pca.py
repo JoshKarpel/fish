@@ -15,4 +15,5 @@ if __name__ == '__main__':
             output_path = OUT / f'control__dims={dims}_clusters={clus}',
             pca_dimensions = dims,
             clusters = clus,
+            remove_background = True,
         )

@@ -133,7 +133,7 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
     frames = frames[skip_frames:]
     len_frames = len(frames)
     if remove_background:
-        frames = bgnd.remove_background(frames, threshold = background_threshold)
+        frames = list(bgnd.remove_background(frames, threshold = background_threshold))
 
     vector_stack = stack_vectors(sorted_vectors_from_frames(frames))
 
