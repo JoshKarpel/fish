@@ -7,8 +7,8 @@ if __name__ == '__main__':
     IN = Path.cwd() / 'data'
     OUT = Path.cwd() / 'out'
 
-    dimensions = [5]
-    clusters = [2, 4, 6]
+    dimensions = [5, 10]
+    clusters = [2, 4, 6, 8]
     for dims, clus in itertools.product(dimensions, clusters):
         fish.label_movie(
             input_movie = IN / 'control.avi',

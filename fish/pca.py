@@ -82,7 +82,7 @@ def do_clustering(vector_stack, pca, clusters):
     return kmeans
 
 
-def label_chunks_in_frames(frames, pca, clusterer, label_colors):
+def label_chunks_in_frames(frames, pca, clusterer, label_colors, corner_blocks = 5):
     horizontal_chunk_size = 64
     vertical_chunk_size = 64
     color_fractions = None
@@ -105,7 +105,7 @@ def label_chunks_in_frames(frames, pca, clusterer, label_colors):
             vslice = slice((v * vertical_chunk_size), ((v + 1) * vertical_chunk_size))
             hslice = slice((h * horizontal_chunk_size), ((h + 1) * horizontal_chunk_size))
 
-            frame[(v * vertical_chunk_size):(v * vertical_chunk_size) + 5, (h * horizontal_chunk_size): (h * horizontal_chunk_size) + 5] = 255
+            frame[(v * vertical_chunk_size):(v * vertical_chunk_size) + corner_blocks, (h * horizontal_chunk_size): (h * horizontal_chunk_size) + corner_blocks] = 255
             color_fractions[vslice, hslice] = colors.fractions(*label_colors[label])
 
         yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)

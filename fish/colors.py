@@ -23,9 +23,9 @@ def fractions(x, y, z):
     return np.array([x / tot, y / tot, z / tot])
 
 
-HTML_COLORS = ['#8dd3c7','#ffffb3','#bebada','#fb8072','#80b1d3','#fdb462','#b3de69','#fccde5','#d9d9d9','#bc80bd','#ccebc5','#ffed6f']
+HTML_COLORS = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02', '#a6761d', '#666666']
 RGB_COLORS = [html_to_rgb(c) for c in HTML_COLORS]
 BRG_COLORS = [rgb_to_brg(rgb) for rgb in RGB_COLORS]
 
 COLOR_SCHEMES = {}
-COLOR_SCHEMES.update({i: BRG_COLORS[:i] for i in range(len(BRG_COLORS))})
+COLOR_SCHEMES.update({i: BRG_COLORS[:i] for i in range(1, len(BRG_COLORS) + 1)})
