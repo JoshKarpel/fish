@@ -1,29 +1,15 @@
 #!/usr/bin/env python3
 
 import itertools
-from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from skimage.util.shape import view_as_blocks
-from sklearn.cluster import KMeans, MiniBatchKMeans
-from sklearn.decomposition import PCA, IncrementalPCA
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.decomposition import IncrementalPCA
 from tqdm import tqdm
 
-from . import io, bgnd
-
-COLORS = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02', '#a6761d', '#666666']
-RGB_COLORS = [(27, 158, 119), (217, 95, 2,), (117, 112, 179), (231, 41, 138), (102, 166, 30), (230, 171, 2), (166, 118, 29), (102, 102, 102)]
-BRG_COLORS = [(B, R, G) for R, G, B in RGB_COLORS]
-
-
-def BRG_fractions(b, r, g):
-    tot = b + r + g
-    return np.array([b / tot, r / tot, g / tot])
-
-
-BRG_FRACTIONS = [BRG_fractions(b, r, g) for b, r, g in BRG_COLORS]
+from . import io, bgnd, colors
 
 
 def frame_to_chunks(frame, horizontal_chunk_size = 64, vertical_chunk_size = 64):
@@ -96,7 +82,7 @@ def do_clustering(vector_stack, pca, clusters):
     return kmeans
 
 
-def label_chunks_in_frames(frames, pca, clusterer):
+def label_chunks_in_frames(frames, pca, clusterer, label_colors):
     horizontal_chunk_size = 64
     vertical_chunk_size = 64
     color_fractions = None
@@ -120,14 +106,16 @@ def label_chunks_in_frames(frames, pca, clusterer):
             hslice = slice((h * horizontal_chunk_size), ((h + 1) * horizontal_chunk_size))
 
             frame[(v * vertical_chunk_size):(v * vertical_chunk_size) + 5, (h * horizontal_chunk_size): (h * horizontal_chunk_size) + 5] = 255
-            color_fractions[vslice, hslice] = BRG_FRACTIONS[label]
+            color_fractions[vslice, hslice] = colors.fractions(*label_colors[label])
 
         yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
 
 
 def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, remove_background = False, background_threshold = 0, skip_frames = 0):
-    if clusters > len(COLORS):
-        raise Exception(f"Not enough colors to label {clusters} clusters (have {len(COLORS)} colors)")
+    try:
+        label_colors = colors.COLOR_SCHEMES[clusters]
+    except KeyError:
+        raise ValueError(f'no suitable color scheme for {clusters} clusters')
 
     frames = io.read(input_movie)[skip_frames:]
     if remove_background:
@@ -137,11 +125,10 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
     pca = do_pca(vector_stack, pca_dimensions)
     clusterer = do_clustering(vector_stack, pca, clusters)
 
-    labelled_frames = label_chunks_in_frames(frames, pca, clusterer)
+    labelled_frames = label_chunks_in_frames(frames, pca, clusterer, label_colors = label_colors)
 
     io.make_movie(
         output_path,
         labelled_frames,
         num_frames = len(frames),
     )
-
