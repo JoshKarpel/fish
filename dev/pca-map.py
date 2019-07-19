@@ -11,7 +11,7 @@ import htmap
 
 @htmap.mapped(map_options = htmap.MapOptions(
     request_disk = '10GB',
-    request_memory = '8GB',
+    request_memory = '16GB',
 ))
 def label_movie(movie, dimensions, clusters, remove_background = False, skip_frames = 0, chunk_size = 64, make_vectors = fish.sorted_ravel):
     op = f'{movie}__dims={dimensions}_clusters={clusters}_rmv={remove_background}_skip={skip_frames}_chunk={chunk_size}_vecs={make_vectors.__name__}.mp4'
@@ -30,7 +30,7 @@ def label_movie(movie, dimensions, clusters, remove_background = False, skip_fra
     htmap.transfer_output_files(op)
 
 
-def concatenate_sorted_chunk_differences(frames, chunk_size):
+def concatenate_sorted_chunk_differences_from_frames(frames, chunk_size):
     prev_chunks = {}
     for frame_number, frame in enumerate(tqdm(frames, desc = 'Building vectors from frames')):
         for (v, h), chunk in fish.iterate_over_chunks(fish.frame_to_chunks(frame, horizontal_chunk_size = chunk_size, vertical_chunk_size = chunk_size)):
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     clusters = [2, 3, 4, 6, 8]
     remove_bgnds = [False, True]
     skips = [0, 100]
-    vector_makers = [fish.sorted_ravel, concatenate_sorted_chunk_differences]
+    vector_makers = [fish.sorted_vectors_from_frames, concatenate_sorted_chunk_differences_from_frames]
     chunk_sizes = [32, 64]
 
     for movie in movies:
