@@ -21,7 +21,7 @@ def iterate_over_chunks(chunks):
         yield (v, h), chunks[v, h]
 
 
-def chunk_to_sorted_vector(chunk):
+def sorted_ravel(chunk):
     return np.sort(chunk, axis = None)
 
 
@@ -29,16 +29,16 @@ def stack_vectors(vectors):
     return np.vstack(vectors)
 
 
-def sorted_vectors_from_frames(frames):
+def sorted_vectors_from_frames(frames, chunk_size):
     for frame_number, frame in enumerate(tqdm(frames, desc = 'Building vectors from frames')):
-        for (v, h), chunk in iterate_over_chunks(frame_to_chunks(frame)):
-            yield chunk_to_sorted_vector(chunk)
+        for (v, h), chunk in iterate_over_chunks(frame_to_chunks(frame, horizontal_chunk_size = chunk_size, vertical_chunk_size = chunk_size)):
+            yield sorted_ravel(chunk)
 
 
 def visualize_chunks_and_vectors(frames):
     for frame_number, frame in enumerate(frames):
         for (v, h), chunk in iterate_over_chunks(frame_to_chunks(frame)):
-            vec = chunk_to_sorted_vector(chunk)
+            vec = sorted_ravel(chunk)
 
             fig, (left, right) = plt.subplots(1, 2, squeeze = True)
             right.plot(vec)
@@ -94,7 +94,7 @@ def label_chunks_in_frames(frames, pca, clusterer, label_colors, corner_blocks =
         vecs = []
         for (v, h), chunk in iterate_over_chunks(frame_to_chunks(frame, horizontal_chunk_size = horizontal_chunk_size, vertical_chunk_size = vertical_chunk_size)):
             coords.append((v, h))
-            vecs.append(chunk_to_sorted_vector(chunk).reshape((1, -1)))
+            vecs.append(sorted_ravel(chunk).reshape((1, -1)))
 
         # it's more efficient to stack up all the vectors, then transform them
         vec_stack = stack_vectors(vecs)
@@ -119,6 +119,7 @@ def label_movie(
     remove_background = False,
     background_threshold = 0,
     skip_frames = 0,
+    chunk_size = 64,
     make_vectors = sorted_vectors_from_frames,
 ):
     try:
@@ -130,7 +131,7 @@ def label_movie(
     if remove_background:
         frames = np.stack(bgnd.remove_background(frames, threshold = background_threshold), axis = 0)
 
-    vector_stack = stack_vectors(make_vectors(frames))
+    vector_stack = stack_vectors(make_vectors(frames, chunk_size))
 
     pca = do_pca(vector_stack, pca_dimensions)
     clusterer = do_clustering(vector_stack, pca, clusters)

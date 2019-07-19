@@ -7,13 +7,13 @@ import numpy as np
 import fish
 
 
-def concatenate_sorted_chunk_differences(frames):
+def concatenate_sorted_chunk_differences(frames, chunk_size):
     prev_chunks = {}
     for frame_number, frame in enumerate(tqdm(frames, desc = 'Building vectors from frames')):
-        for (v, h), chunk in fish.iterate_over_chunks(fish.frame_to_chunks(frame)):
-            foo = fish.chunk_to_sorted_vector(chunk)
+        for (v, h), chunk in fish.iterate_over_chunks(fish.frame_to_chunks(frame, horizontal_chunk_size = chunk_size, vertical_chunk_size = chunk_size)):
+            foo = fish.sorted_ravel(chunk)
             if (v, h) in prev_chunks:
-                bar = fish.chunk_to_sorted_vector(chunk - prev_chunks[v, h])
+                bar = fish.sorted_ravel(chunk - prev_chunks[v, h])
             else:
                 bar = np.zeros_like(foo)
 

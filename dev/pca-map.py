@@ -13,8 +13,8 @@ import htmap
     request_disk = '10GB',
     request_memory = '8GB',
 ))
-def label_movie(movie, dimensions, clusters, remove_background = False, skip_frames = 0, make_vectors = fish.chunk_to_sorted_vector):
-    op = f'{movie}__dims={dimensions}_clusters={clusters}_rmv={remove_background}_skip={skip_frames}_vecs={make_vectors.__name__}.mp4'
+def label_movie(movie, dimensions, clusters, remove_background = False, skip_frames = 0, chunk_size = 64, make_vectors = fish.sorted_ravel):
+    op = f'{movie}__dims={dimensions}_clusters={clusters}_rmv={remove_background}_skip={skip_frames}_chunk={chunk_size}_vecs={make_vectors.__name__}.mp4'
 
     fish.label_movie(
         input_movie = f'{movie}.avi',
@@ -23,19 +23,20 @@ def label_movie(movie, dimensions, clusters, remove_background = False, skip_fra
         clusters = clusters,
         remove_background = remove_background,
         skip_frames = skip_frames,
+        chunk_size = chunk_size,
         make_vectors = make_vectors,
     )
 
     htmap.transfer_output_files(op)
 
 
-def concatenate_sorted_chunk_differences(frames):
+def concatenate_sorted_chunk_differences(frames, chunk_size):
     prev_chunks = {}
     for frame_number, frame in enumerate(tqdm(frames, desc = 'Building vectors from frames')):
-        for (v, h), chunk in fish.iterate_over_chunks(fish.frame_to_chunks(frame)):
-            foo = fish.chunk_to_sorted_vector(chunk)
+        for (v, h), chunk in fish.iterate_over_chunks(fish.frame_to_chunks(frame, horizontal_chunk_size = chunk_size, vertical_chunk_size = chunk_size)):
+            foo = fish.sorted_ravel(chunk)
             if (v, h) in prev_chunks:
-                bar = fish.chunk_to_sorted_vector(chunk - prev_chunks[v, h])
+                bar = fish.sorted_ravel(chunk - prev_chunks[v, h])
             else:
                 bar = np.zeros_like(foo)
 
@@ -55,7 +56,8 @@ if __name__ == '__main__':
     clusters = [2, 3, 4, 6, 8]
     remove_bgnds = [False, True]
     skips = [0, 100]
-    vector_makers = [fish.chunk_to_sorted_vector, concatenate_sorted_chunk_differences]
+    vector_makers = [fish.sorted_ravel, concatenate_sorted_chunk_differences]
+    chunk_size = [32, 64]
 
     for movie in movies:
         with label_movie.build_map(
@@ -64,8 +66,8 @@ if __name__ == '__main__':
                 fixed_input_files = [f'http://proxy.chtc.wisc.edu/SQUID/karpel/{movie}.avi']
             )
         ) as mb:
-            for dim, clu, rmv, skip, mv in itertools.product(dimensions, clusters, remove_bgnds, skips, vector_makers):
-                mb(movie, dim, clu, remove_background = rmv, skip_frames = skip, make_vectors = mv)
+            for dim, clu, rmv, skip, mv, chunk_size in itertools.product(dimensions, clusters, remove_bgnds, skips, vector_makers, chunk_sizes):
+                mb(movie, dim, clu, remove_background = rmv, skip_frames = skip, chunk_size = chunk_size, make_vectors = mv)
 
         map = mb.map
         print(f'Submitted {map} with {len(map)} jobs')
