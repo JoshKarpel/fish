@@ -57,7 +57,7 @@ if __name__ == '__main__':
     remove_bgnds = [False, True]
     skips = [0, 100]
     vector_makers = [fish.sorted_ravel, concatenate_sorted_chunk_differences]
-    chunk_size = [32, 64]
+    chunk_sizes = [32, 64]
 
     for movie in movies:
         with label_movie.build_map(
