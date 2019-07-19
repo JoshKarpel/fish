@@ -21,31 +21,31 @@ def iterate_over_chunks(chunks):
         yield (v, h), chunks[v, h]
 
 
-def sorted_ravel(chunk):
+def sorted_ravel(frame_idx, v, h, chunk, prev_chunks):
     return np.sort(chunk, axis = None)
+
+
+def sorted_ravel_with_diff(frame_idx, v, h, chunk, prev_chunks):
+    foo = np.sort(chunk, axis = None)
+    if frame_idx != 0:
+        bar = np.sort(chunk - prev_chunks[frame_idx - 1, v, h], axis = None)
+    else:
+        bar = np.zeros_like(foo)
+
+    return np.concatenate((foo, bar))
 
 
 def stack_vectors(vectors):
     return np.vstack(vectors)
 
 
-def sorted_vectors_from_frames(frames, chunk_size):
-    for frame_number, frame in enumerate(tqdm(frames, desc = 'Building vectors from frames')):
+def make_vectors_from_frames(frames, chunk_size, make_vector = sorted_ravel):
+    prev_chunks = {}
+    for frame_idx, frame in enumerate(frames):
         for (v, h), chunk in iterate_over_chunks(frame_to_chunks(frame, horizontal_chunk_size = chunk_size, vertical_chunk_size = chunk_size)):
-            yield sorted_ravel(chunk)
+            yield frame_idx, v, h, make_vector(frame_idx, v, h, chunk, prev_chunks)
 
-
-def visualize_chunks_and_vectors(frames):
-    for frame_number, frame in enumerate(frames):
-        for (v, h), chunk in iterate_over_chunks(frame_to_chunks(frame)):
-            vec = sorted_ravel(chunk)
-
-            fig, (left, right) = plt.subplots(1, 2, squeeze = True)
-            right.plot(vec)
-            right.set_title(f'Sorted Intensities')
-            left.imshow(chunk, cmap = 'Greys_r')
-            left.set_title(f'Chunk {frame_number}:{v}-{h}')
-            plt.show()
+            prev_chunks[frame_idx, v, h] = chunk
 
 
 def make_batches_of_vectors(stacked, batch_size = 100):
@@ -82,19 +82,17 @@ def do_clustering(vector_stack, pca, clusters):
     return kmeans
 
 
-def label_chunks_in_frames(frames, pca, clusterer, label_colors, corner_blocks = 5):
-    horizontal_chunk_size = 64
-    vertical_chunk_size = 64
+def label_chunks_in_frames(frames, pca, clusterer, make_vector, chunk_size, label_colors, corner_blocks = 5):
     color_fractions = None
-    for frame in frames:
+    for frame_idx, frame in enumerate(frames):
         if color_fractions is None:
             color_fractions = np.empty(frame.shape + (3,), dtype = np.float64)
 
         coords = []
         vecs = []
-        for (v, h), chunk in iterate_over_chunks(frame_to_chunks(frame, horizontal_chunk_size = horizontal_chunk_size, vertical_chunk_size = vertical_chunk_size)):
+        for _, v, h, vec in make_vectors_from_frames(frame[np.newaxis, ...], make_vector = make_vector, chunk_size = chunk_size):
             coords.append((v, h))
-            vecs.append(sorted_ravel(chunk).reshape((1, -1)))
+            vecs.append(vec.reshape((1, -1)))
 
         # it's more efficient to stack up all the vectors, then transform them
         vec_stack = stack_vectors(vecs)
@@ -102,10 +100,10 @@ def label_chunks_in_frames(frames, pca, clusterer, label_colors, corner_blocks =
         labels = clusterer.predict(transformed)
 
         for (v, h), label in zip(coords, labels):
-            vslice = slice((v * vertical_chunk_size), ((v + 1) * vertical_chunk_size))
-            hslice = slice((h * horizontal_chunk_size), ((h + 1) * horizontal_chunk_size))
+            vslice = slice((v * chunk_size), ((v + 1) * chunk_size))
+            hslice = slice((h * chunk_size), ((h + 1) * chunk_size))
 
-            frame[(v * vertical_chunk_size):(v * vertical_chunk_size) + corner_blocks, (h * horizontal_chunk_size): (h * horizontal_chunk_size) + corner_blocks] = 255
+            frame[(v * chunk_size):(v * chunk_size) + corner_blocks, (h * chunk_size): (h * chunk_size) + corner_blocks] = 255
             color_fractions[vslice, hslice] = colors.fractions(*label_colors[label])
 
         yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
@@ -120,7 +118,7 @@ def label_movie(
     background_threshold = 0,
     skip_frames = 0,
     chunk_size = 64,
-    make_vectors = sorted_vectors_from_frames,
+    make_vector = sorted_ravel,
 ):
     try:
         label_colors = colors.COLOR_SCHEMES[clusters]
@@ -129,14 +127,14 @@ def label_movie(
 
     frames = io.read(input_movie)[skip_frames:]
     if remove_background:
-        frames = np.stack(bgnd.remove_background(frames, threshold = background_threshold), axis = 0)
+        frames = np.stack(list(bgnd.remove_background(frames, threshold = background_threshold)), axis = 0)
 
-    vector_stack = stack_vectors(make_vectors(frames, chunk_size))
+    vector_stack = stack_vectors(list(vec for *_, vec in make_vectors_from_frames(frames, chunk_size, make_vector)))
 
     pca = do_pca(vector_stack, pca_dimensions)
     clusterer = do_clustering(vector_stack, pca, clusters)
 
-    labelled_frames = label_chunks_in_frames(frames, pca, clusterer, label_colors = label_colors)
+    labelled_frames = label_chunks_in_frames(frames, pca, clusterer, make_vector, chunk_size, label_colors = label_colors)
 
     io.make_movie(
         output_path,

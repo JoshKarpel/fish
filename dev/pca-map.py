@@ -13,7 +13,7 @@ import htmap
     request_disk = '10GB',
     request_memory = '16GB',
 ))
-def label_movie(movie, dimensions, clusters, remove_background = False, skip_frames = 0, chunk_size = 64, make_vectors = fish.sorted_ravel):
+def label_movie(movie, dimensions, clusters, remove_background, skip_frames, chunk_size, make_vectors):
     op = f'{movie}__dims={dimensions}_clusters={clusters}_rmv={remove_background}_skip={skip_frames}_chunk={chunk_size}_vecs={make_vectors.__name__}.mp4'
 
     fish.label_movie(
@@ -24,25 +24,10 @@ def label_movie(movie, dimensions, clusters, remove_background = False, skip_fra
         remove_background = remove_background,
         skip_frames = skip_frames,
         chunk_size = chunk_size,
-        make_vectors = make_vectors,
+        make_vector = make_vectors,
     )
 
     htmap.transfer_output_files(op)
-
-
-def concatenate_sorted_chunk_differences_from_frames(frames, chunk_size):
-    prev_chunks = {}
-    for frame_number, frame in enumerate(tqdm(frames, desc = 'Building vectors from frames')):
-        for (v, h), chunk in fish.iterate_over_chunks(fish.frame_to_chunks(frame, horizontal_chunk_size = chunk_size, vertical_chunk_size = chunk_size)):
-            foo = fish.sorted_ravel(chunk)
-            if (v, h) in prev_chunks:
-                bar = fish.sorted_ravel(chunk - prev_chunks[v, h])
-            else:
-                bar = np.zeros_like(foo)
-
-            yield np.concatenate((foo, bar))
-
-            prev_chunks[v, h] = chunk
 
 
 if __name__ == '__main__':
@@ -56,7 +41,7 @@ if __name__ == '__main__':
     clusters = [2, 3, 4, 6, 8]
     remove_bgnds = [False, True]
     skips = [0, 100]
-    vector_makers = [fish.sorted_vectors_from_frames, concatenate_sorted_chunk_differences_from_frames]
+    vector_makers = [fish.sorted_ravel, fish.sorted_ravel_with_diff]
     chunk_sizes = [32, 64]
 
     for movie in movies:
@@ -70,4 +55,5 @@ if __name__ == '__main__':
                 mb(movie, dim, clu, remove_background = rmv, skip_frames = skip, chunk_size = chunk_size, make_vectors = mv)
 
         map = mb.map
+        
         print(f'Submitted {map} with {len(map)} jobs')
