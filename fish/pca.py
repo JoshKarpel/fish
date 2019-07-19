@@ -111,7 +111,16 @@ def label_chunks_in_frames(frames, pca, clusterer, label_colors, corner_blocks =
         yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
 
 
-def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, remove_background = False, background_threshold = 0, skip_frames = 0):
+def label_movie(
+    input_movie,
+    output_path,
+    pca_dimensions: int,
+    clusters: int,
+    remove_background = False,
+    background_threshold = 0,
+    skip_frames = 0,
+    make_vectors = sorted_vectors_from_frames,
+):
     try:
         label_colors = colors.COLOR_SCHEMES[clusters]
     except KeyError:
@@ -121,7 +130,8 @@ def label_movie(input_movie, output_path, pca_dimensions: int, clusters: int, re
     if remove_background:
         frames = np.stack(bgnd.remove_background(frames, threshold = background_threshold), axis = 0)
 
-    vector_stack = stack_vectors(sorted_vectors_from_frames(frames))
+    vector_stack = stack_vectors(make_vectors(frames))
+
     pca = do_pca(vector_stack, pca_dimensions)
     clusterer = do_clustering(vector_stack, pca, clusters)
 
