@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from skimage.util.shape import view_as_blocks
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.decomposition import IncrementalPCA
+from sklearn.mixture import GaussianMixture
 from tqdm import tqdm
 
 from . import io, bgnd, colors
@@ -69,10 +70,7 @@ def do_pca(vector_stack, pca_dimensions):
     return pca
 
 
-# anything from here will work
-# https://scikit-learn.org/stable/modules/clustering.html
-# todo: switch on these from higher-level code
-def do_clustering(vector_stack, pca, clusters):
+def _do_cluster_via_kmeans(vector_stack, pca, clusters):
     num_batches, batches = make_batches_of_vectors(vector_stack, batch_size = 100)
 
     kmeans = MiniBatchKMeans(n_clusters = clusters)
@@ -80,6 +78,31 @@ def do_clustering(vector_stack, pca, clusters):
         kmeans.partial_fit(pca.transform(batch))
 
     return kmeans
+
+
+def _do_clustering_via_gmm(vector_stack, pca, clusters):
+    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size = 100)
+
+    gmm = GaussianMixture(
+        n_components = clusters,
+        warm_start = True,
+    )
+    for batch in tqdm(batches, total = num_batches, desc = 'Performing Clustering'):
+        gmm.fit(pca.transform(batch))
+
+    return gmm
+
+
+CLUSTERING_ALGORITHMS = {
+    'kmeans': _do_cluster_via_kmeans,
+    'gmm': _do_clustering_via_gmm,
+}
+
+
+# anything from here will work
+# https://scikit-learn.org/stable/modules/clustering.html
+def do_clustering(vector_stack, pca, clusters, clustering_algorithm):
+    return CLUSTERING_ALGORITHMS[clustering_algorithm](vector_stack, pca, clusters)
 
 
 def label_chunks_in_frames(frames, pca, clusterer, make_vector, chunk_size, label_colors, corner_blocks = 5):
@@ -119,6 +142,7 @@ def label_movie(
     skip_frames = 0,
     chunk_size = 64,
     make_vector = sorted_ravel,
+    clustering_algorithm = 'kmeans',
 ):
     try:
         label_colors = colors.COLOR_SCHEMES[clusters]
@@ -132,7 +156,7 @@ def label_movie(
     vector_stack = stack_vectors(list(vec for *_, vec in make_vectors_from_frames(frames, chunk_size, make_vector)))
 
     pca = do_pca(vector_stack, pca_dimensions)
-    clusterer = do_clustering(vector_stack, pca, clusters)
+    clusterer = do_clustering(vector_stack, pca, clusters, clustering_algorithm)
 
     labelled_frames = label_chunks_in_frames(frames, pca, clusterer, make_vector, chunk_size, label_colors = label_colors)
 

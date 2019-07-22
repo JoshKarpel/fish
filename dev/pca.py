@@ -6,22 +6,6 @@ import numpy as np
 
 import fish
 
-
-def concatenate_sorted_chunk_differences(frames, chunk_size):
-    prev_chunks = {}
-    for frame_number, frame in enumerate(tqdm(frames, desc = 'Building vectors from frames')):
-        for (v, h), chunk in fish.iterate_over_chunks(fish.frame_to_chunks(frame, horizontal_chunk_size = chunk_size, vertical_chunk_size = chunk_size)):
-            foo = fish.sorted_ravel(chunk)
-            if (v, h) in prev_chunks:
-                bar = fish.sorted_ravel(chunk - prev_chunks[v, h])
-            else:
-                bar = np.zeros_like(foo)
-
-            yield np.concatenate((foo, bar))
-
-            prev_chunks[v, h] = chunk
-
-
 if __name__ == '__main__':
     IN = Path.cwd() / 'data'
     OUT = Path.cwd() / 'out'
@@ -31,10 +15,12 @@ if __name__ == '__main__':
     for dims, clus in itertools.product(dimensions, clusters):
         fish.label_movie(
             input_movie = IN / 'control.avi',
-            output_path = OUT / f'control__dims={dims}_clusters={clus}_sorted_ravel',
+            output_path = OUT / f'test',
             pca_dimensions = dims,
             clusters = clus,
             remove_background = True,
+            # skip_frames = 1500,
             make_vector = fish.sorted_ravel,
-            chunk_size = 32,
+            chunk_size = 64,
+            clustering_algorithm = 'gmm',
         )
