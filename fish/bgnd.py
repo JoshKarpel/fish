@@ -22,11 +22,8 @@ def remove_background(frames, threshold = 0):
         pixel_threshold += threshold * std_over_frames
 
     for frame in frames:
-        frame_minus_avg = frame - avg_over_frames
-        frame_minus_avg[:] = np.where(
+        yield np.where(
             frame >= pixel_threshold,
-            frame_minus_avg,
+            frame,
             0
-        )
-
-        yield frame_minus_avg.astype(np.uint8)
+        ).astype(np.uint8)
