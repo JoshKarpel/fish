@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 
+import logging
+
 import itertools
 
 import numpy as np
-import matplotlib.pyplot as plt
 from skimage.util.shape import view_as_blocks
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.decomposition import IncrementalPCA
 from sklearn.mixture import GaussianMixture
+
 from tqdm import tqdm
 
 from . import io, bgnd, colors
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
-def frame_to_chunks(frame, horizontal_chunk_size = 64, vertical_chunk_size = 64):
-    return view_as_blocks(frame, block_shape = (vertical_chunk_size, horizontal_chunk_size))
+
+def frame_to_chunks(frame, horizontal_chunk_size=64, vertical_chunk_size=64):
+    return view_as_blocks(
+        frame, block_shape=(vertical_chunk_size, horizontal_chunk_size)
+    )
 
 
 def iterate_over_chunks(chunks):
@@ -23,13 +30,13 @@ def iterate_over_chunks(chunks):
 
 
 def sorted_ravel(frame_idx, v, h, chunk, prev_chunks):
-    return np.sort(chunk, axis = None)
+    return np.sort(chunk, axis=None)
 
 
 def sorted_ravel_with_diff(frame_idx, v, h, chunk, prev_chunks):
-    foo = np.sort(chunk, axis = None)
+    foo = np.sort(chunk, axis=None)
     if frame_idx != 0:
-        bar = np.sort(chunk - prev_chunks[frame_idx - 1, v, h], axis = None)
+        bar = np.sort(chunk - prev_chunks[frame_idx - 1, v, h], axis=None)
     else:
         bar = np.zeros_like(foo)
 
@@ -40,62 +47,66 @@ def stack_vectors(vectors):
     return np.vstack(vectors)
 
 
-def make_vectors_from_frames(frames, chunk_size, make_vector = sorted_ravel):
+def make_vectors_from_frames(frames, chunk_size, make_vector=sorted_ravel):
     prev_chunks = {}
     for frame_idx, frame in enumerate(frames):
-        for (v, h), chunk in iterate_over_chunks(frame_to_chunks(frame, horizontal_chunk_size = chunk_size, vertical_chunk_size = chunk_size)):
+        for (v, h), chunk in iterate_over_chunks(
+            frame_to_chunks(
+                frame, horizontal_chunk_size=chunk_size, vertical_chunk_size=chunk_size
+            )
+        ):
             yield frame_idx, v, h, make_vector(frame_idx, v, h, chunk, prev_chunks)
 
             prev_chunks[frame_idx, v, h] = chunk
 
 
-def make_batches_of_vectors(stacked, batch_size = 100):
+def make_batches_of_vectors(stacked, batch_size=100):
     full, last = divmod(len(stacked), batch_size)
-    return full + (1 if last != 0 else 0), _make_batches(stacked, batch_size, full, last)
+    return (
+        full + (1 if last != 0 else 0),
+        _make_batches(stacked, batch_size, full, last),
+    )
 
 
 def _make_batches(stacked, batch_size, full, last):
     for i in range(0, full):
-        yield stacked[i * batch_size: (i + 1) * batch_size]
+        yield stacked[i * batch_size : (i + 1) * batch_size]
     if last != 0:
-        yield stacked[((i + 1) * batch_size):]
+        yield stacked[((i + 1) * batch_size) :]
 
 
-def do_pca(vector_stack, pca_dimensions):
-    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size = 100)
-    pca = IncrementalPCA(n_components = pca_dimensions)
-    for batch in tqdm(batches, total = num_batches, desc = 'Performing PCA'):
+def do_pca(vector_stack, pca_dimensions, batch_size=100):
+    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size=batch_size)
+    pca = IncrementalPCA(n_components=pca_dimensions)
+    for batch in tqdm(batches, total=num_batches, desc="Performing PCA"):
         pca.partial_fit(batch)
 
     return pca
 
 
-def _do_cluster_via_kmeans(vector_stack, pca, clusters):
-    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size = 100)
+def _do_cluster_via_kmeans(vector_stack, pca, clusters, batch_size=100):
+    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size=batch_size)
 
-    kmeans = MiniBatchKMeans(n_clusters = clusters)
-    for batch in tqdm(batches, total = num_batches, desc = 'Performing Clustering'):
+    kmeans = MiniBatchKMeans(n_clusters=clusters)
+    for batch in tqdm(batches, total=num_batches, desc="Performing Clustering"):
         kmeans.partial_fit(pca.transform(batch))
 
     return kmeans
 
 
 def _do_clustering_via_gmm(vector_stack, pca, clusters):
-    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size = 100)
+    num_batches, batches = make_batches_of_vectors(vector_stack, batch_size=100)
 
-    gmm = GaussianMixture(
-        n_components = clusters,
-        warm_start = True,
-    )
-    for batch in tqdm(batches, total = num_batches, desc = 'Performing Clustering'):
+    gmm = GaussianMixture(n_components=clusters, warm_start=True)
+    for batch in tqdm(batches, total=num_batches, desc="Performing Clustering"):
         gmm.fit(pca.transform(batch))
 
     return gmm
 
 
 CLUSTERING_ALGORITHMS = {
-    'kmeans': _do_cluster_via_kmeans,
-    'gmm': _do_clustering_via_gmm,
+    "kmeans": _do_cluster_via_kmeans,
+    "gmm": _do_clustering_via_gmm,
 }
 
 
@@ -105,15 +116,19 @@ def do_clustering(vector_stack, pca, clusters, clustering_algorithm):
     return CLUSTERING_ALGORITHMS[clustering_algorithm](vector_stack, pca, clusters)
 
 
-def label_chunks_in_frames(frames, pca, clusterer, make_vector, chunk_size, label_colors, corner_blocks = 5):
+def label_chunks_in_frames(
+    frames, pca, clusterer, make_vector, chunk_size, label_colors, corner_blocks=5
+):
     color_fractions = None
     for frame_idx, frame in enumerate(frames):
         if color_fractions is None:
-            color_fractions = np.empty(frame.shape + (3,), dtype = np.float64)
+            color_fractions = np.empty(frame.shape + (3,), dtype=np.float64)
 
         coords = []
         vecs = []
-        for _, v, h, vec in make_vectors_from_frames(frame[np.newaxis, ...], make_vector = make_vector, chunk_size = chunk_size):
+        for _, v, h, vec in make_vectors_from_frames(
+            frame[np.newaxis, ...], make_vector=make_vector, chunk_size=chunk_size
+        ):
             coords.append((v, h))
             vecs.append(vec.reshape((1, -1)))
 
@@ -126,7 +141,10 @@ def label_chunks_in_frames(frames, pca, clusterer, make_vector, chunk_size, labe
             vslice = slice((v * chunk_size), ((v + 1) * chunk_size))
             hslice = slice((h * chunk_size), ((h + 1) * chunk_size))
 
-            frame[(v * chunk_size):(v * chunk_size) + corner_blocks, (h * chunk_size): (h * chunk_size) + corner_blocks] = 255
+            frame[
+                (v * chunk_size) : (v * chunk_size) + corner_blocks,
+                (h * chunk_size) : (h * chunk_size) + corner_blocks,
+            ] = 255
             color_fractions[vslice, hslice] = colors.fractions(*label_colors[label])
 
         yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
@@ -137,31 +155,39 @@ def label_movie(
     output_path,
     pca_dimensions: int,
     clusters: int,
-    remove_background = False,
-    background_threshold = 0,
-    skip_frames = 0,
-    chunk_size = 64,
-    make_vector = sorted_ravel,
-    clustering_algorithm = 'kmeans',
+    remove_background=False,
+    background_threshold=0,
+    include_frames=None,
+    chunk_size=64,
+    make_vector=sorted_ravel,
+    clustering_algorithm="kmeans",
 ):
     try:
         label_colors = colors.COLOR_SCHEMES[clusters]
     except KeyError:
-        raise ValueError(f'no suitable color scheme for {clusters} clusters')
+        raise ValueError(f"no suitable color scheme for {clusters} clusters")
 
-    frames = io.read(input_movie)[skip_frames:]
+    frames = io.load_or_read(input_movie)
+    if include_frames is not None:
+        frames = frames[include_frames]
     if remove_background:
-        frames = np.stack(list(bgnd.remove_background(frames, threshold = background_threshold)), axis = 0)
+        frames = np.stack(
+            list(bgnd.remove_background(frames, threshold=background_threshold)), axis=0
+        )
+    logger.debug(f"Frame stack shape: {frames.shape}")
 
-    vector_stack = stack_vectors(list(vec for *_, vec in make_vectors_from_frames(frames, chunk_size, make_vector)))
+    vector_stack = stack_vectors(
+        list(
+            vec for *_, vec in make_vectors_from_frames(frames, chunk_size, make_vector)
+        )
+    )
+    logger.debug(f"Vector stack shape: {vector_stack.shape}")
 
     pca = do_pca(vector_stack, pca_dimensions)
     clusterer = do_clustering(vector_stack, pca, clusters, clustering_algorithm)
 
-    labelled_frames = label_chunks_in_frames(frames, pca, clusterer, make_vector, chunk_size, label_colors = label_colors)
-
-    io.make_movie(
-        output_path,
-        labelled_frames,
-        num_frames = len(frames),
+    labelled_frames = label_chunks_in_frames(
+        frames, pca, clusterer, make_vector, chunk_size, label_colors=label_colors
     )
+
+    io.make_movie(output_path, labelled_frames, num_frames=len(frames))
