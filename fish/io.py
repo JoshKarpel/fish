@@ -109,3 +109,5 @@ def make_movie(path, frames, num_frames: Optional[int] = None, fps=30):
     except FileNotFoundError:
         pass
     tmp_path.rename(path)
+
+    return path

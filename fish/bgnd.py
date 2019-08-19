@@ -1,4 +1,6 @@
+import cv2 as cv
 import numpy as np
+
 
 from tqdm import tqdm
 
@@ -25,3 +27,13 @@ def remove_background(frames, threshold=0):
         yield np.where(frame >= pixel_threshold, frame - avg_over_frames, 0).astype(
             np.uint8
         )
+
+
+def remove_background2(frames, history=None, threshold=None):
+    fgbg = cv.createBackgroundSubtractorMOG2(
+        history=history, varThreshold=threshold, detectShadows=False
+    )
+
+    for frame in frames:
+        blurred = cv.medianBlur(frame, 5)
+        yield np.where(fgbg.apply(blurred), blurred, 0)

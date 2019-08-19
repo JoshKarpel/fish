@@ -1,4 +1,4 @@
-FROM htcondor/htmap-exec:v0.4.1
+FROM htcondor/htmap-exec:v0.4.3
 
 USER root
 
