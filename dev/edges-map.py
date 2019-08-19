@@ -1,5 +1,6 @@
 import logging
 
+import sys
 from pathlib import Path
 
 import htmap
@@ -30,10 +31,10 @@ def make_movie(movie, lower, upper, smoothing):
 
 
 if __name__ == "__main__":
-    IN = Path(__file__).parent.parent / "data"
-    OUT = Path(__file__).parent / "out"
+    tag = sys.argv[1]
+    docker_version = sys.argv[2]
 
-    frames = fish.load_or_read(IN / "control")[100:]
+    htmap.settings["DOCKER.IMAGE"] = f"maventree/fish:{docker_version}"
 
     with make_movie.build_map() as mb:
         for lower in range(60, 200, 20):
