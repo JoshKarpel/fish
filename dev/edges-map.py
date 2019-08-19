@@ -36,11 +36,16 @@ if __name__ == "__main__":
 
     htmap.settings["DOCKER.IMAGE"] = f"maventree/fish:{docker_version}"
 
-    with make_movie.build_map() as mb:
+    with make_movie.build_map(
+        tag=tag,
+        map_options=htmap.MapOptions(
+            fixed_input_files=[f"http://proxy.chtc.wisc.edu/SQUID/karpel/control.avi"]
+        ),
+    ) as mb:
         for lower in range(60, 200, 20):
             for upper in range(max(lower + 20, 100), 240, 20):
                 for smoothing in (3, 5, 7):
-                    mb("control", lower, upper, smoothing)
+                    mb(f"control.avi", lower, upper, smoothing)
 
     m = mb.map
     print(m.tag)

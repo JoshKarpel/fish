@@ -29,11 +29,9 @@ def remove_background(frames, threshold=0):
         )
 
 
-def remove_background2(frames, history=None, threshold=None):
-    fgbg = cv.createBackgroundSubtractorMOG2(
-        history=history, varThreshold=threshold, detectShadows=False
-    )
+def remove_background2(frames):
+    fgbg = cv.createBackgroundSubtractorMOG2()
 
     for frame in frames:
-        blurred = cv.medianBlur(frame, 5)
-        yield np.where(fgbg.apply(blurred), blurred, 0)
+        blurred = cv.GaussianBlur(frame, (5, 5), 0)
+        yield np.where(fgbg.apply(blurred), frame, 0)
