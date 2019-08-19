@@ -8,6 +8,8 @@ from tqdm import tqdm
 import fish
 import htmap
 
+import fish.vectorize
+
 
 @htmap.mapped(map_options=htmap.MapOptions(request_disk="10GB", request_memory="16GB"))
 def label_movie(
@@ -29,7 +31,7 @@ def label_movie(
         remove_background=remove_background,
         skip_frames=skip_frames,
         chunk_size=chunk_size,
-        make_vector=make_vectors,
+        vectorizers=make_vectors,
     )
 
     htmap.transfer_output_files(op)
@@ -46,7 +48,7 @@ if __name__ == "__main__":
     clusters = [2, 3, 4, 6, 8]
     remove_bgnds = [False, True]
     skips = [0, 100]
-    vector_makers = [fish.sorted_ravel, fish.sorted_ravel_with_diff]
+    vector_makers = [fish.vectorize.sorted_ravel, fish.sorted_ravel_with_diff]
     chunk_sizes = [32, 64]
 
     for movie in movies:

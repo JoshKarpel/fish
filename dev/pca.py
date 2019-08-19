@@ -12,12 +12,13 @@ if __name__ == "__main__":
 
     fish.label_movie(
         input_movie=IN / "control.avi",
-        output_path=OUT / f"test",
-        pca_dimensions=10,
-        clusters=4,
+        output_path=OUT / f"test_two_vectors",
+        pca_dimensions=2,
+        clusters=2,
         remove_background=True,
-        include_frames=range(-500, -400),
-        make_vector=fish.sorted_ravel,
+        background_threshold=0,
+        include_frames=range(100, -1),
+        vectorizers=[fish.sorted_ravel, fish.sorted_diff],
         chunk_size=64,
         clustering_algorithm="kmeans",
     )
