@@ -97,6 +97,10 @@ def do_pca(
     return pcas
 
 
+def normalized_pca_transform(pca: IncrementalPCA, vector: np.array) -> np.array:
+    return pca.transform(vector) / pca.singular_values_[0]
+
+
 def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size=100):
     num_batches, batch_iterators = make_all_batches(
         vector_stacks, batch_size=batch_size
@@ -106,7 +110,7 @@ def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size=100):
         zip(*batch_iterators), total=num_batches, desc="Performing clustering"
     ):
         transformed_batches = [
-            pca.transform(batch) for pca, batch in zip(pcas, batches)
+            normalized_pca_transform(pca, batch) for pca, batch in zip(pcas, batches)
         ]
         kmeans.partial_fit(np.concatenate(transformed_batches, axis=1))
 
@@ -163,7 +167,7 @@ def label_chunks_in_frames(
 
             # it's more efficient to stack up all the vectors, then transform them
             vec_stack = stack_vectors(vectors_for_frame)
-            transformed_stacks.append(pca.transform(vec_stack))
+            transformed_stacks.append(normalized_pca_transform(pca, vec_stack))
 
         labels = clusterer.predict(np.concatenate(transformed_stacks, axis=1))
 
@@ -185,12 +189,12 @@ def label_movie(
     output_path,
     pca_dimensions: int,
     clusters: int,
-    remove_background=True,
-    background_threshold=0,
-    include_frames=None,
-    chunk_size=64,
+    remove_background: bool = True,
+    background_threshold: Union[int, float] = 0,
+    include_frames: slice = None,
+    chunk_size: int = 64,
     vectorizers: Iterable[Callable] = (vectorize.sorted_ravel,),
-    clustering_algorithm="kmeans",
+    clustering_algorithm: str = "kmeans",
 ):
     try:
         label_colors = colors.COLOR_SCHEMES[clusters]

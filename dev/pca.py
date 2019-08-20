@@ -17,7 +17,7 @@ if __name__ == "__main__":
         clusters=2,
         remove_background=True,
         background_threshold=0,
-        include_frames=range(100, -1),
+        include_frames=slice(-100, None),
         vectorizers=[fish.sorted_ravel, fish.sorted_diff],
         chunk_size=64,
         clustering_algorithm="kmeans",
