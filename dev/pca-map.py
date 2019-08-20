@@ -17,11 +17,17 @@ def label_movie(
     dimensions,
     clusters,
     remove_background,
-    skip_frames,
+    include_frames,
     chunk_size,
-    make_vectors,
+    vectorizers,
 ):
-    op = f"{movie}__dims={dimensions}_clusters={clusters}_rmv={remove_background}_skip={skip_frames}_chunk={chunk_size}_vecs={make_vectors.__name__}.mp4"
+    parts = [
+        f"dims={dimensions}",
+        f"clusters={clusters}",
+        f"chunk={chunk_size}",
+        f"vecs={'+'.join(v.__name__ for v in vectorizers)}.mp4",
+    ]
+    op = Path.cwd() / f"{movie}__{'_'.join(parts)}"
 
     fish.label_movie(
         input_movie=f"{movie}.avi",
@@ -29,9 +35,9 @@ def label_movie(
         pca_dimensions=dimensions,
         clusters=clusters,
         remove_background=remove_background,
-        skip_frames=skip_frames,
+        include_frames=include_frames,
         chunk_size=chunk_size,
-        vectorizers=make_vectors,
+        vectorizers=vectorizers,
     )
 
     htmap.transfer_output_files(op)
@@ -43,12 +49,13 @@ if __name__ == "__main__":
 
     htmap.settings["DOCKER.IMAGE"] = f"maventree/fish:{docker_version}"
 
-    movies = ["control", "drug"]
-    dimensions = [2, 5, 10, 20]
+    movies = ["control"]
+    dimensions = [2, 4, 6, 10, 20]
     clusters = [2, 3, 4, 6, 8]
-    remove_bgnds = [False, True]
-    skips = [0, 100]
-    vector_makers = [fish.vectorize.sorted_ravel, fish.sorted_ravel_with_diff]
+    vectorizer_sets = [
+        [fish.vectorize.sorted_ravel],
+        [fish.vectorize.sorted_ravel, fish.sorted_diff],
+    ]
     chunk_sizes = [32, 64]
 
     for movie in movies:
@@ -60,17 +67,17 @@ if __name__ == "__main__":
                 ]
             ),
         ) as mb:
-            for dim, clu, rmv, skip, mv, chunk_size in itertools.product(
-                dimensions, clusters, remove_bgnds, skips, vector_makers, chunk_sizes
+            for dim, clu, vecs, chunk_size in itertools.product(
+                dimensions, clusters, vectorizer_sets, chunk_sizes
             ):
                 mb(
                     movie,
-                    dim,
-                    clu,
-                    remove_background=rmv,
-                    skip_frames=skip,
+                    dimensions=dim,
+                    clusters=clu,
                     chunk_size=chunk_size,
-                    make_vectors=mv,
+                    vectorizers=vecs,
+                    remove_background=True,
+                    include_frames=slice(100, None),
                 )
 
         map = mb.map
