@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     fish.label_movie(
         input_movie=IN / "control.avi",
-        output_path=OUT / f"test_two_vectors",
+        output_path=OUT / f"test",
         pca_dimensions=2,
         clusters=2,
         remove_background=True,
@@ -20,5 +20,5 @@ if __name__ == "__main__":
         include_frames=slice(-100, None),
         vectorizers=[fish.sorted_ravel, fish.sorted_diff],
         chunk_size=64,
-        clustering_algorithm="kmeans",
+        clustering_algorithm="gmm",
     )

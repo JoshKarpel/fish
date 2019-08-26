@@ -5,8 +5,9 @@ import itertools
 
 import numpy as np
 from skimage.util.shape import view_as_blocks
-from sklearn.cluster import MiniBatchKMeans
 from sklearn.decomposition import IncrementalPCA
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.mixture import GaussianMixture
 
 from tqdm import tqdm
 
@@ -102,41 +103,49 @@ def normalized_pca_transform(pca: IncrementalPCA, vector: np.ndarray) -> np.ndar
 
 
 def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size=100):
+    kmeans = MiniBatchKMeans(n_clusters=clusters)
+
+    for batch in _get_transformed_batches_for_clustering(
+        vector_stacks, pcas, batch_size
+    ):
+        kmeans.partial_fit(batch)
+
+    return kmeans
+
+
+def _do_clustering_via_gmm(vector_stacks, pcas, clusters, batch_size=100):
+    gmm = GaussianMixture(n_components=clusters, warm_start=True)
+
+    for batch in _get_transformed_batches_for_clustering(
+        vector_stacks, pcas, batch_size
+    ):
+        gmm.fit(batch)
+
+    return gmm
+
+
+def _get_transformed_batches_for_clustering(vector_stacks, pcas, batch_size=100):
     num_batches, batch_iterators = make_all_batches(
         vector_stacks, batch_size=batch_size
     )
-    kmeans = MiniBatchKMeans(n_clusters=clusters)
     for batches in tqdm(
         zip(*batch_iterators), total=num_batches, desc="Performing clustering"
     ):
         transformed_batches = [
             normalized_pca_transform(pca, batch) for pca, batch in zip(pcas, batches)
         ]
-        kmeans.partial_fit(np.concatenate(transformed_batches, axis=1))
 
-    return kmeans
-
-
-# def _do_clustering_via_gmm(vector_stack, pca, clusters):
-#     num_batches, batches = make_batches_of_vectors(vector_stack, batch_size=100)
-#
-#     gmm = GaussianMixture(n_components=clusters, warm_start=True)
-#     for batch in tqdm(batches, total=num_batches, desc="Performing Clustering"):
-#         gmm.fit(pca.transform(batch))
-#
-#     return gmm
+        yield np.concatenate(transformed_batches, axis=1)
 
 
-CLUSTERING_ALGORITHMS = {
-    "kmeans": _do_cluster_via_kmeans,
-    # "gmm": _do_clustering_via_gmm,
-}
-
-
-# anything from here will work
-# https://scikit-learn.org/stable/modules/clustering.html
 def do_clustering(vector_stack, pca, clusters, clustering_algorithm):
-    return CLUSTERING_ALGORITHMS[clustering_algorithm](vector_stack, pca, clusters)
+    return _CLUSTERING_ALGORITHMS[clustering_algorithm](vector_stack, pca, clusters)
+
+
+_CLUSTERING_ALGORITHMS = {
+    "kmeans": _do_cluster_via_kmeans,
+    "gmm": _do_clustering_via_gmm,
+}
 
 
 def label_chunks_in_frames(
