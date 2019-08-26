@@ -74,7 +74,7 @@ def make_all_batches(vector_stacks, batch_size=100):
 
 
 def do_pca(
-    vector_stacks: List[np.array],
+    vector_stacks: List[np.ndarray],
     pca_dimensions: Union[int, Iterable[int]],
     batch_size: int = 100,
 ) -> List[IncrementalPCA]:
@@ -97,7 +97,7 @@ def do_pca(
     return pcas
 
 
-def normalized_pca_transform(pca: IncrementalPCA, vector: np.array) -> np.array:
+def normalized_pca_transform(pca: IncrementalPCA, vector: np.ndarray) -> np.ndarray:
     return pca.transform(vector) / pca.singular_values_[0]
 
 

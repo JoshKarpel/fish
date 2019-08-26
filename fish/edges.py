@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def get_edges(frame: np.array, lower_threshold, upper_threshold, smoothing):
+def get_edges(frame: np.ndarray, lower_threshold, upper_threshold, smoothing):
     return cv.Canny(
         frame,
         threshold1=lower_threshold,
@@ -24,7 +24,9 @@ def vector_length(a, b) -> float:
     return np.linalg.norm(a - b)
 
 
-def draw_bounding_circles(frame: np.array, edges: np.array, curves):
+def draw_bounding_circles(
+    frame: np.ndarray, edges: np.ndarray, curves, track_motion=False
+):
     image, contours, hierarchy = cv.findContours(
         edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE
     )
@@ -51,18 +53,20 @@ def draw_bounding_circles(frame: np.array, edges: np.array, curves):
         if len(curves) == 0:
             curves.append([pos])
 
-        nearest_curve = min(curves, key=lambda curve: vector_length(curve[-1], pos))
-        if vector_length(nearest_curve[-1], pos) < 50:
-            nearest_curve.append(pos)
-        else:
-            curves.append([pos])
+        if track_motion:
+            nearest_curve = min(curves, key=lambda curve: vector_length(curve[-1], pos))
+            if vector_length(nearest_curve[-1], pos) < 50:
+                nearest_curve.append(pos)
+            else:
+                curves.append([pos])
 
-    cv.polylines(
-        img,
-        [np.vstack(curve) for curve in curves],
-        color=(0, 0, 255),
-        thickness=1,
-        isClosed=False,
-    )
+    if track_motion:
+        cv.polylines(
+            img,
+            [np.vstack(curve) for curve in curves],
+            color=(0, 0, 255),
+            thickness=1,
+            isClosed=False,
+        )
 
     return img
