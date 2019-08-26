@@ -19,6 +19,7 @@ if __name__ == "__main__":
         background_threshold=0,
         include_frames=slice(-100, None),
         vectorizers=[fish.sorted_ravel, fish.sorted_diff],
-        chunk_size=64,
+        chunk_size=31,
+        chunk_skip=16,
         clustering_algorithm="gmm",
     )

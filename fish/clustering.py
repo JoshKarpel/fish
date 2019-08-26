@@ -4,7 +4,7 @@ from typing import List, Iterable, Union, Callable
 import itertools
 
 import numpy as np
-from skimage.util.shape import view_as_blocks
+from skimage.util.shape import view_as_blocks, view_as_windows
 from sklearn.decomposition import IncrementalPCA
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.mixture import GaussianMixture
@@ -17,32 +17,30 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def frame_to_chunks(frame, horizontal_chunk_size=64, vertical_chunk_size=64):
-    return view_as_blocks(
-        frame, block_shape=(vertical_chunk_size, horizontal_chunk_size)
-    )
+def frame_to_windows(frame, chunk_size, chunk_skip):
+    return view_as_windows(frame, window_shape=chunk_size, step=chunk_skip)
 
 
-def iterate_over_chunks(chunks):
-    for v, h in itertools.product(range(chunks.shape[0]), range(chunks.shape[1])):
-        yield (v, h), chunks[v, h]
+def iterate_over_windows(windows):
+    for v, h in itertools.product(range(windows.shape[0]), range(windows.shape[1])):
+        yield (v, h), windows[v, h]
 
 
 def stack_vectors(vectors):
     return np.stack(vectors, axis=0)
 
 
-def make_vectors_from_frames(frames, chunk_size, vectorizer):
-    prev_chunks = {}
+def make_vectors_from_frames(
+    frames: np.ndarray, vectorizer, chunk_size: int, chunk_skip: int
+):
+    prev_windows = {}
     for frame_idx, frame in enumerate(frames):
-        for (v, h), chunk in iterate_over_chunks(
-            frame_to_chunks(
-                frame, horizontal_chunk_size=chunk_size, vertical_chunk_size=chunk_size
-            )
+        for (v, h), window in iterate_over_windows(
+            frame_to_windows(frame, chunk_size=chunk_size, chunk_skip=chunk_skip)
         ):
-            yield frame_idx, v, h, vectorizer(frame_idx, v, h, chunk, prev_chunks)
+            yield frame_idx, v, h, vectorizer(frame_idx, v, h, window, prev_windows)
 
-            prev_chunks[frame_idx, v, h] = chunk
+            prev_windows[frame_idx, v, h] = window
 
 
 def make_batches_of_vectors(stacked, batch_size=100):
@@ -148,14 +146,15 @@ _CLUSTERING_ALGORITHMS = {
 }
 
 
-def label_chunks_in_frames(
+def label_windows_in_frames(
     frames,
     pcas,
     clusterer,
     vectorizers: Iterable[Callable],
-    chunk_size,
+    chunk_size: int,
+    chunk_skip: int,
     label_colors,
-    corner_blocks=5,
+    corner_blocks: int = 5,
 ):
     color_fractions = None
     for frame_idx, frame in enumerate(frames):
@@ -167,7 +166,10 @@ def label_chunks_in_frames(
         for idx, (pca, mv) in enumerate(zip(pcas, vectorizers)):
             vectors_for_frame = []
             for _, v, h, vec in make_vectors_from_frames(
-                frame[np.newaxis, ...], vectorizer=mv, chunk_size=chunk_size
+                frame[np.newaxis, ...],
+                vectorizer=mv,
+                chunk_size=chunk_size,
+                chunk_skip=chunk_skip,
             ):
                 # only need to build coords on first vectorizer
                 if idx == 0:
@@ -202,6 +204,7 @@ def label_movie(
     background_threshold: Union[int, float] = 0,
     include_frames: slice = None,
     chunk_size: int = 64,
+    chunk_skip: int = 1,
     vectorizers: Iterable[Callable] = (vectorize.sorted_ravel,),
     clustering_algorithm: str = "kmeans",
 ):
@@ -223,7 +226,12 @@ def label_movie(
         stack_vectors(
             [
                 vec
-                for *_, vec in make_vectors_from_frames(frames, chunk_size, vectorizer)
+                for *_, vec in make_vectors_from_frames(
+                    frames,
+                    vectorizer=vectorizer,
+                    chunk_size=chunk_size,
+                    chunk_skip=chunk_skip,
+                )
             ]
         )
         for vectorizer in vectorizers
@@ -235,8 +243,14 @@ def label_movie(
     pcas = do_pca(vector_stacks, pca_dimensions)
     clusterer = do_clustering(vector_stacks, pcas, clusters, clustering_algorithm)
 
-    labelled_frames = label_chunks_in_frames(
-        frames, pcas, clusterer, vectorizers, chunk_size, label_colors=label_colors
+    labelled_frames = label_windows_in_frames(
+        frames,
+        pcas,
+        clusterer,
+        vectorizers,
+        chunk_size=chunk_size,
+        chunk_skip=chunk_skip,
+        label_colors=label_colors,
     )
 
     io.make_movie(output_path, labelled_frames, num_frames=len(frames))
