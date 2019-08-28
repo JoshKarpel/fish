@@ -206,7 +206,7 @@ def label_movie(
     clustering_algorithm: str = "kmeans",
 ):
     try:
-        label_colors = colors.COLOR_SCHEMES[clusters]
+        label_colors = colors.BRG_COLOR_SCHEMES[clusters]
     except KeyError:
         raise ValueError(f"no suitable color scheme for {clusters} clusters")
 
@@ -235,8 +235,38 @@ def label_movie(
     pcas = do_pca(vector_stacks, pca_dimensions)
     clusterer = do_clustering(vector_stacks, pcas, clusters, clustering_algorithm)
 
+    plot_clusters(output_path, vector_stacks, pcas, clusterer)
+
     labelled_frames = label_chunks_in_frames(
         frames, pcas, clusterer, vectorizers, chunk_size, label_colors=label_colors
     )
 
     io.make_movie(output_path, labelled_frames, num_frames=len(frames))
+
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+
+def plot_clusters(output_path, vector_stacks, pcas, clusterer):
+    transformed_vectors = []
+    for pca, vector_stack in zip(pcas, vector_stacks):
+        transformed_vectors.append(normalized_pca_transform(pca, vector_stack))
+    transformed = np.concatenate(transformed_vectors, axis=1)
+
+    labels = clusterer.predict(transformed)
+    c = [colors.HTML_COLORS[i] for i in labels]
+
+    fig = plt.figure(figsize=(8, 8))
+
+    if transformed.shape[1] == 2:
+        ax = fig.add_subplot(111)
+        ax.scatter(transformed[:, 0], transformed[:, 1], s=1, c=c)
+    if transformed.shape[1] == 3:
+        ax = fig.add_subplot(111, projection="3d")
+        ax.scatter(transformed[:, 0], transformed[:, 1], transformed[:, 2], s=1, c=c)
+    else:
+        return
+
+    fig.tight_layout()
+    plt.savefig(str(output_path.with_suffix(".png")), dpi=600)

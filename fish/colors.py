@@ -36,5 +36,5 @@ HTML_COLORS = [
 RGB_COLORS = [html_to_rgb(c) for c in HTML_COLORS]
 BRG_COLORS = [rgb_to_brg(rgb) for rgb in RGB_COLORS]
 
-COLOR_SCHEMES = {}
-COLOR_SCHEMES.update({i: BRG_COLORS[:i] for i in range(1, len(BRG_COLORS) + 1)})
+BRG_COLOR_SCHEMES = {}
+BRG_COLOR_SCHEMES.update({i: BRG_COLORS[:i] for i in range(1, len(BRG_COLORS) + 1)})
