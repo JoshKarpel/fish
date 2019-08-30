@@ -1,5 +1,5 @@
 import logging
-from typing import List, Iterable, Union, Callable
+from typing import List, Iterable, Union, Callable, Collection
 
 import itertools
 
@@ -43,6 +43,25 @@ def make_vectors_from_frames(frames, chunk_size, vectorizer):
             yield frame_idx, v, h, vectorizer(frame_idx, v, h, chunk, prev_chunks)
 
             prev_chunks[frame_idx, v, h] = chunk
+
+
+def make_all_vectors_from_frames(frames, chunk_size, vectorizers):
+    prev_chunks = {}
+    for frame_idx, frame in enumerate(frames):
+        chunks_for_frame = []
+        for (v, h), chunk in iterate_over_chunks(
+            frame_to_chunks(
+                frame, horizontal_chunk_size=chunk_size, vertical_chunk_size=chunk_size
+            )
+        ):
+            chunks_for_frame.append(
+                (
+                    (v, h),
+                    [vec(frame_idx, v, h, chunk, prev_chunks) for vec in vectorizers],
+                )
+            )
+            prev_chunks[frame_idx, v, h] = chunk
+        yield frame_idx, chunks_for_frame
 
 
 def make_batches_of_vectors(stacked, batch_size=100):
@@ -103,6 +122,7 @@ def normalized_pca_transform(pca: IncrementalPCA, vector: np.ndarray) -> np.ndar
 
 
 def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size=100):
+    logger.debug(f"Created KMeans clusterer")
     kmeans = MiniBatchKMeans(n_clusters=clusters)
 
     for batch in _get_transformed_batches_for_clustering(
@@ -114,6 +134,7 @@ def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size=100):
 
 
 def _do_clustering_via_gmm(vector_stacks, pcas, clusters, batch_size=100):
+    logger.debug(f"Created GMM clusterer")
     gmm = GaussianMixture(n_components=clusters, warm_start=True)
 
     for batch in _get_transformed_batches_for_clustering(
@@ -152,33 +173,33 @@ def label_chunks_in_frames(
     frames,
     pcas,
     clusterer,
-    vectorizers: Iterable[Callable],
+    vectorizers: Collection[Callable],
     chunk_size,
-    label_colors,
     corner_blocks=5,
 ):
     color_fractions = None
-    for frame_idx, frame in enumerate(frames):
-        if color_fractions is None:
-            color_fractions = np.empty(frame.shape + (3,), dtype=np.float64)
+
+    for frame_idx, coords_and_vecs in make_all_vectors_from_frames(
+        frames, chunk_size=chunk_size, vectorizers=vectorizers
+    ):
+        vec_stacks = [[] for _ in pcas]
+        coords = []
+        for chunk_coords, chunk_vecs in coords_and_vecs:
+            coords.append(chunk_coords)
+            for vec, stack in zip(chunk_vecs, vec_stacks):
+                stack.append(vec)
 
         transformed_stacks = []
-        coords = []
-        for idx, (pca, mv) in enumerate(zip(pcas, vectorizers)):
-            vectors_for_frame = []
-            for _, v, h, vec in make_vectors_from_frames(
-                frame[np.newaxis, ...], vectorizer=mv, chunk_size=chunk_size
-            ):
-                # only need to build coords on first vectorizer
-                if idx == 0:
-                    coords.append((v, h))
-                vectors_for_frame.append(vec)
-
-            # it's more efficient to stack up all the vectors, then transform them
-            vec_stack = stack_vectors(vectors_for_frame)
+        for pca, vec_stack in zip(pcas, vec_stacks):
+            vec_stack = stack_vectors(vec_stack)
             transformed_stacks.append(normalized_pca_transform(pca, vec_stack))
 
-        labels = clusterer.predict(np.concatenate(transformed_stacks, axis=1))
+        cat_stacks = np.concatenate(transformed_stacks, axis=1)
+        labels = clusterer.predict(cat_stacks)
+
+        frame = frames[frame_idx]
+        if color_fractions is None:
+            color_fractions = np.empty(frame.shape + (3,), dtype=np.float64)
 
         for (v, h), label in zip(coords, labels):
             vslice = slice((v * chunk_size), ((v + 1) * chunk_size))
@@ -188,9 +209,47 @@ def label_chunks_in_frames(
                 (v * chunk_size) : (v * chunk_size) + corner_blocks,
                 (h * chunk_size) : (h * chunk_size) + corner_blocks,
             ] = 255
-            color_fractions[vslice, hslice] = colors.fractions(*label_colors[label])
+            color_fractions[vslice, hslice] = colors.fractions(
+                *colors.BGR_COLORS[label]
+            )
 
         yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
+
+    # for frame_idx, frame in enumerate(frames):
+    #     if color_fractions is None:
+    #         color_fractions = np.empty(frame.shape + (3,), dtype=np.float64)
+    #
+    #     # BUG: because I rebuild vectors here frame-by-frame, frame_idx is zero
+    #     # each iteration, and sorted_diff is always all zeros
+    #     transformed_stacks = []
+    #     coords = []
+    #     for idx, (pca, mv) in enumerate(zip(pcas, vectorizers)):
+    #         vectors_for_frame = []
+    #         for _, v, h, vec in make_vectors_from_frames(
+    #             frame[np.newaxis, ...], vectorizer=mv, chunk_size=chunk_size
+    #         ):
+    #             # only need to build coords on first vectorizer
+    #             if idx == 0:
+    #                 coords.append((v, h))
+    #             vectors_for_frame.append(vec)
+    #
+    #         # it's more efficient to stack up all the vectors, then transform them
+    #         vec_stack = stack_vectors(vectors_for_frame)
+    #         transformed_stacks.append(normalized_pca_transform(pca, vec_stack))
+    #
+    #     labels = clusterer.predict(np.concatenate(transformed_stacks, axis=1))
+    #
+    #     for (v, h), label in zip(coords, labels):
+    #         vslice = slice((v * chunk_size), ((v + 1) * chunk_size))
+    #         hslice = slice((h * chunk_size), ((h + 1) * chunk_size))
+    #
+    #         frame[
+    #             (v * chunk_size) : (v * chunk_size) + corner_blocks,
+    #             (h * chunk_size) : (h * chunk_size) + corner_blocks,
+    #         ] = 255
+    #         color_fractions[vslice, hslice] = colors.fractions(*label_colors[label])
+    #
+    #     yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
 
 
 def label_movie(
@@ -205,11 +264,6 @@ def label_movie(
     vectorizers: Iterable[Callable] = (vectorize.sorted_ravel,),
     clustering_algorithm: str = "kmeans",
 ):
-    try:
-        label_colors = colors.BRG_COLOR_SCHEMES[clusters]
-    except KeyError:
-        raise ValueError(f"no suitable color scheme for {clusters} clusters")
-
     frames = io.load_or_read(input_movie)
     if include_frames is not None:
         frames = frames[include_frames]
@@ -238,7 +292,7 @@ def label_movie(
     plot_clusters(output_path, vector_stacks, pcas, clusterer)
 
     labelled_frames = label_chunks_in_frames(
-        frames, pcas, clusterer, vectorizers, chunk_size, label_colors=label_colors
+        frames, pcas, clusterer, vectorizers, chunk_size
     )
 
     io.make_movie(output_path, labelled_frames, num_frames=len(frames))
@@ -257,16 +311,31 @@ def plot_clusters(output_path, vector_stacks, pcas, clusterer):
     labels = clusterer.predict(transformed)
     c = [colors.HTML_COLORS[i] for i in labels]
 
-    fig = plt.figure(figsize=(8, 8))
+    if isinstance(clusterer, MiniBatchKMeans):
+        centers = clusterer.cluster_centers_
+    elif isinstance(clusterer, GaussianMixture):
+        centers = clusterer.means_
+    center_kwargs = dict(c="black", s=200, alpha=0.5, marker="x")
 
-    if transformed.shape[1] == 2:
+    fig = plt.figure(figsize=(8, 8))
+    if transformed.shape[1] == 1:
+        ax = fig.add_subplot(111)
+        ax.scatter(transformed[:, 0], np.ones_like(transformed[:, 0]), s=1, c=c)
+        ax.scatter(centers[:, 0], np.ones_like(centers[:, 0]), **center_kwargs)
+        ax.set_ylim(0.9, 1.1)
+    elif transformed.shape[1] == 2:
         ax = fig.add_subplot(111)
         ax.scatter(transformed[:, 0], transformed[:, 1], s=1, c=c)
-    if transformed.shape[1] == 3:
+        ax.scatter(centers[:, 0], centers[:, 1], **center_kwargs)
+    elif transformed.shape[1] == 3:
         ax = fig.add_subplot(111, projection="3d")
         ax.scatter(transformed[:, 0], transformed[:, 1], transformed[:, 2], s=1, c=c)
+        ax.scatter(centers[:, 0], centers[:, 1], centers[:, 2], **center_kwargs)
     else:
+        logger.debug("Skipped making plot")
         return
 
     fig.tight_layout()
-    plt.savefig(str(output_path.with_suffix(".png")), dpi=600)
+    op = str(output_path.with_suffix(".png"))
+    logger.debug(f"Writing cluster plot to {op}")
+    plt.savefig(op, dpi=600)

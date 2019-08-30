@@ -13,9 +13,9 @@ def html_to_rgb(html):
     return r, g, b
 
 
-def rgb_to_brg(rgb):
+def rgb_to_bgr(rgb):
     r, g, b = rgb
-    return b, r, g
+    return b, g, r
 
 
 def fractions(x, y, z):
@@ -34,7 +34,4 @@ HTML_COLORS = [
     "#666666",
 ]
 RGB_COLORS = [html_to_rgb(c) for c in HTML_COLORS]
-BRG_COLORS = [rgb_to_brg(rgb) for rgb in RGB_COLORS]
-
-BRG_COLOR_SCHEMES = {}
-BRG_COLOR_SCHEMES.update({i: BRG_COLORS[:i] for i in range(1, len(BRG_COLORS) + 1)})
+BGR_COLORS = [rgb_to_bgr(rgb) for rgb in RGB_COLORS]
