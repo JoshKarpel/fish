@@ -9,8 +9,10 @@ from skimage.util.shape import view_as_blocks
 from sklearn.decomposition import IncrementalPCA
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.mixture import GaussianMixture
-
 import cv2 as cv
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
 
 from tqdm import tqdm
 
@@ -43,9 +45,9 @@ def make_vectors_from_frames(frames, chunk_size, vectorizer):
                 frame, horizontal_chunk_size=chunk_size, vertical_chunk_size=chunk_size
             )
         ):
-            yield frame_idx, v, h, vectorizer(frame_idx, v, h, chunk, prev_chunks)
-
             prev_chunks[frame_idx, v, h] = chunk
+            if frame_idx >= 2:
+                yield frame_idx, v, h, vectorizer(frame_idx, v, h, chunk, prev_chunks)
 
 
 def make_all_vectors_from_frames(frames, chunk_size, vectorizers):
@@ -64,10 +66,12 @@ def make_all_vectors_from_frames(frames, chunk_size, vectorizers):
                 )
             )
             prev_chunks[frame_idx, v, h] = chunk
-        yield frame_idx, chunks_for_frame
+
+        if frame_idx >= 2:
+            yield frame_idx, chunks_for_frame
 
 
-def make_batches_of_vectors(stacked, batch_size=100):
+def make_batches_of_vectors(stacked, batch_size: int = 8192):
     full, last = divmod(len(stacked), batch_size)
     return (
         full + (1 if last != 0 else 0),
@@ -82,7 +86,7 @@ def _make_batches(stacked, batch_size, full, last):
         yield stacked[((i + 1) * batch_size) :]
 
 
-def make_all_batches(vector_stacks, batch_size=100):
+def make_all_batches(vector_stacks, batch_size: int = 8192):
     num_batches = []
     batches_for_each_vectorizer = []
     for vector_stack in vector_stacks:
@@ -99,7 +103,7 @@ def make_all_batches(vector_stacks, batch_size=100):
 def do_pca(
     vector_stacks: List[np.ndarray],
     pca_dimensions: Union[int, Iterable[int]],
-    batch_size: int = 100,
+    batch_size: int = 8192,
 ) -> List[IncrementalPCA]:
     if isinstance(pca_dimensions, int):
         pca_dimensions = itertools.repeat(pca_dimensions)
@@ -124,7 +128,7 @@ def normalized_pca_transform(pca: IncrementalPCA, vector: np.ndarray) -> np.ndar
     return pca.transform(vector) / pca.singular_values_[0]
 
 
-def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size=100):
+def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size: int = 8192):
     logger.debug(f"Created KMeans clusterer")
     kmeans = MiniBatchKMeans(n_clusters=clusters)
 
@@ -136,7 +140,7 @@ def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size=100):
     return kmeans
 
 
-def _do_clustering_via_gmm(vector_stacks, pcas, clusters, batch_size=100):
+def _do_clustering_via_gmm(vector_stacks, pcas, clusters, batch_size: int = 8192):
     logger.debug(f"Created GMM clusterer")
     gmm = GaussianMixture(n_components=clusters, warm_start=True)
 
@@ -148,7 +152,9 @@ def _do_clustering_via_gmm(vector_stacks, pcas, clusters, batch_size=100):
     return gmm
 
 
-def _get_transformed_batches_for_clustering(vector_stacks, pcas, batch_size=100):
+def _get_transformed_batches_for_clustering(
+    vector_stacks, pcas, batch_size: int = 8192
+):
     num_batches, batch_iterators = make_all_batches(
         vector_stacks, batch_size=batch_size
     )
@@ -183,6 +189,7 @@ def label_chunks_in_frames(
     color_fractions = None
 
     label_counters = []
+    yield label_counters
     for frame_idx, coords_and_vecs in make_all_vectors_from_frames(
         frames, chunk_size=chunk_size, vectorizers=vectorizers
     ):
@@ -218,20 +225,28 @@ def label_chunks_in_frames(
             )
 
         # apply label colors to frame
-        frame = (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
+        display = (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
 
         # count number of each label in frame
         label_counter = collections.Counter(labels)
         label_counters.append(label_counter)
 
         # draw legend box
-        legend_width = 130
-        legend_height = (len(clusterer.means_) * 40) + 10
+        if isinstance(clusterer, MiniBatchKMeans):
+            num_labels = len(clusterer.cluster_centers_)
+        elif isinstance(clusterer, GaussianMixture):
+            num_labels = len(clusterer.means_)
+        legend_width = 150
+        legend_height = (num_labels * 40) + 10
         cv.rectangle(
-            frame, (0, 0), (legend_width, legend_height), color=(0, 0, 0), thickness=-1
+            display,
+            (0, 0),
+            (legend_width, legend_height),
+            color=(0, 0, 0),
+            thickness=-1,
         )
         cv.rectangle(
-            frame,
+            display,
             (0, 0),
             (legend_width, legend_height),
             color=(255, 255, 255),
@@ -240,9 +255,9 @@ def label_chunks_in_frames(
 
         # draw legend text
         just = len(str(max(label_counter.values())))
-        for i, label in enumerate(range(len(clusterer.means_)), start=1):
+        for i, label in enumerate(range(num_labels), start=1):
             cv.putText(
-                frame,
+                display,
                 f"{label}: {label_counter[label]: >{just}d}",
                 (10, (i * 40)),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
@@ -252,7 +267,7 @@ def label_chunks_in_frames(
                 lineType=cv.LINE_AA,
             )
 
-        yield frame
+        yield display
 
 
 def label_movie(
@@ -264,7 +279,7 @@ def label_movie(
     background_threshold: Union[int, float] = 0,
     include_frames: slice = None,
     chunk_size: int = 64,
-    vectorizers: Iterable[Callable] = (vectorize.sorted_ravel,),
+    vectorizers: Collection[Callable] = (vectorize.sorted_ravel,),
     clustering_algorithm: str = "kmeans",
 ):
     frames = io.load_or_read(input_movie)
@@ -297,12 +312,11 @@ def label_movie(
     labelled_frames = label_chunks_in_frames(
         frames, pcas, clusterer, vectorizers, chunk_size
     )
+    label_counters = next(labelled_frames)
 
-    io.make_movie(output_path, labelled_frames, num_frames=len(frames))
+    io.make_movie(output_path, labelled_frames, num_frames=len(frames) - 1)
 
-
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+    make_labels_over_time_stackplot(output_path, label_counters, clusters)
 
 
 def plot_clusters(output_path, vector_stacks, pcas, clusterer):
@@ -312,6 +326,7 @@ def plot_clusters(output_path, vector_stacks, pcas, clusterer):
     transformed = np.concatenate(transformed_vectors, axis=1)
 
     labels = clusterer.predict(transformed)
+    print(collections.Counter(labels))
     c = [colors.HTML_COLORS[i] for i in labels]
 
     if isinstance(clusterer, MiniBatchKMeans):
@@ -339,6 +354,36 @@ def plot_clusters(output_path, vector_stacks, pcas, clusterer):
         return
 
     fig.tight_layout()
-    op = str(output_path.with_suffix(".png"))
+    op = str(output_path.with_name(f"{output_path.stem}__clusters.png"))
+    logger.debug(f"Writing cluster plot to {op}")
+    plt.savefig(op, dpi=600)
+
+
+def make_labels_over_time_stackplot(output_path, label_counts_over_time, num_labels):
+    labels = list(range(num_labels))
+    label_to_array = {
+        label: np.array([x[label] for x in label_counts_over_time]) for label in labels
+    }
+    num_frames = len(list(label_to_array.values())[0])
+
+    fig = plt.figure(figsize=(8, 8), dpi=600)
+    ax = fig.add_subplot(111)
+
+    ax.stackplot(
+        np.array(range(num_frames)),
+        *label_to_array.values(),
+        labels=list(label_to_array.keys()),
+        colors=[colors.HTML_COLORS[label] for label in label_to_array],
+    )
+
+    ax.set_xlim(0, num_frames - 1)
+    ax.set_ylim(0, sum(label_counts_over_time[0].values()))
+
+    ax.set_xlabel("Time (Frames)")
+    ax.set_ylabel("Label Counts")
+
+    ax.legend(loc="lower left")
+
+    op = str(output_path.with_name(f"{output_path.stem}__labels_over_time.png"))
     logger.debug(f"Writing cluster plot to {op}")
     plt.savefig(op, dpi=600)

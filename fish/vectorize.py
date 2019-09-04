@@ -15,4 +15,4 @@ def sorted_diff(frame_idx, v, h, chunk, prev_chunks):
             axis=None,
         ).astype(np.uint8)
     else:
-        return np.zeros(chunk.size, dtype=np.uint8)
+        return None

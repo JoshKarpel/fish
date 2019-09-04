@@ -12,7 +12,7 @@ if __name__ == "__main__":
     OUT = Path(__file__).parent / "out"
 
     for dims, clusters, cluster_alg, vectorizer in itertools.product(
-        [1], [4], ["gmm"], [[fish.sorted_ravel]]
+        [3], [3], ["kmeans"], [[fish.sorted_ravel]]
     ):
         print(dims, clusters, cluster_alg, vectorizer)
         fish.label_movie(
@@ -23,8 +23,8 @@ if __name__ == "__main__":
             clusters=clusters,
             remove_background=True,
             background_threshold=0,
-            include_frames=slice(-200, None),
+            include_frames=slice(-100, None),
             vectorizers=vectorizer,
-            chunk_size=64,
+            chunk_size=32,
             clustering_algorithm=cluster_alg,
         )
