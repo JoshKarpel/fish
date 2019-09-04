@@ -2,12 +2,15 @@ import logging
 from typing import List, Iterable, Union, Callable, Collection
 
 import itertools
+import collections
 
 import numpy as np
 from skimage.util.shape import view_as_blocks
 from sklearn.decomposition import IncrementalPCA
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.mixture import GaussianMixture
+
+import cv2 as cv
 
 from tqdm import tqdm
 
@@ -179,6 +182,7 @@ def label_chunks_in_frames(
 ):
     color_fractions = None
 
+    label_counters = []
     for frame_idx, coords_and_vecs in make_all_vectors_from_frames(
         frames, chunk_size=chunk_size, vectorizers=vectorizers
     ):
@@ -213,43 +217,42 @@ def label_chunks_in_frames(
                 *colors.BGR_COLORS[label]
             )
 
-        yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
+        # apply label colors to frame
+        frame = (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
 
-    # for frame_idx, frame in enumerate(frames):
-    #     if color_fractions is None:
-    #         color_fractions = np.empty(frame.shape + (3,), dtype=np.float64)
-    #
-    #     # BUG: because I rebuild vectors here frame-by-frame, frame_idx is zero
-    #     # each iteration, and sorted_diff is always all zeros
-    #     transformed_stacks = []
-    #     coords = []
-    #     for idx, (pca, mv) in enumerate(zip(pcas, vectorizers)):
-    #         vectors_for_frame = []
-    #         for _, v, h, vec in make_vectors_from_frames(
-    #             frame[np.newaxis, ...], vectorizer=mv, chunk_size=chunk_size
-    #         ):
-    #             # only need to build coords on first vectorizer
-    #             if idx == 0:
-    #                 coords.append((v, h))
-    #             vectors_for_frame.append(vec)
-    #
-    #         # it's more efficient to stack up all the vectors, then transform them
-    #         vec_stack = stack_vectors(vectors_for_frame)
-    #         transformed_stacks.append(normalized_pca_transform(pca, vec_stack))
-    #
-    #     labels = clusterer.predict(np.concatenate(transformed_stacks, axis=1))
-    #
-    #     for (v, h), label in zip(coords, labels):
-    #         vslice = slice((v * chunk_size), ((v + 1) * chunk_size))
-    #         hslice = slice((h * chunk_size), ((h + 1) * chunk_size))
-    #
-    #         frame[
-    #             (v * chunk_size) : (v * chunk_size) + corner_blocks,
-    #             (h * chunk_size) : (h * chunk_size) + corner_blocks,
-    #         ] = 255
-    #         color_fractions[vslice, hslice] = colors.fractions(*label_colors[label])
-    #
-    #     yield (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
+        # count number of each label in frame
+        label_counter = collections.Counter(labels)
+        label_counters.append(label_counter)
+
+        # draw legend box
+        legend_width = 130
+        legend_height = (len(clusterer.means_) * 40) + 10
+        cv.rectangle(
+            frame, (0, 0), (legend_width, legend_height), color=(0, 0, 0), thickness=-1
+        )
+        cv.rectangle(
+            frame,
+            (0, 0),
+            (legend_width, legend_height),
+            color=(255, 255, 255),
+            thickness=1,
+        )
+
+        # draw legend text
+        just = len(str(max(label_counter.values())))
+        for i, label in enumerate(range(len(clusterer.means_)), start=1):
+            cv.putText(
+                frame,
+                f"{label}: {label_counter[label]: >{just}d}",
+                (10, (i * 40)),
+                fontFace=cv.FONT_HERSHEY_DUPLEX,
+                fontScale=1,
+                color=255 * colors.fractions(*colors.BGR_COLORS[label]),
+                thickness=1,
+                lineType=cv.LINE_AA,
+            )
+
+        yield frame
 
 
 def label_movie(

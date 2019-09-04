@@ -12,14 +12,7 @@ if __name__ == "__main__":
     OUT = Path(__file__).parent / "out"
 
     for dims, clusters, cluster_alg, vectorizer in itertools.product(
-        [1, 2, 3],
-        [2, 4],
-        ["kmeans", "gmm"],
-        [
-            [fish.sorted_ravel],
-            [fish.sorted_diff],
-            [fish.sorted_ravel, fish.sorted_diff],
-        ],
+        [1], [4], ["gmm"], [[fish.sorted_ravel]]
     ):
         print(dims, clusters, cluster_alg, vectorizer)
         fish.label_movie(
