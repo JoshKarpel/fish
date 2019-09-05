@@ -208,7 +208,9 @@ def label_chunks_in_frames(
         cat_stacks = np.concatenate(transformed_stacks, axis=1)
         labels = clusterer.predict(cat_stacks)
 
-        frame = frames[frame_idx]
+        # this copy is extremely important, because we're going to mutate
+        # this array for display
+        frame = frames[frame_idx].copy()
         if color_fractions is None:
             color_fractions = np.empty(frame.shape + (3,), dtype=np.float64)
 
@@ -225,7 +227,7 @@ def label_chunks_in_frames(
             )
 
         # apply label colors to frame
-        display = (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
+        frame = (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
 
         # count number of each label in frame
         label_counter = collections.Counter(labels)
@@ -239,14 +241,10 @@ def label_chunks_in_frames(
         legend_width = 150
         legend_height = (num_labels * 40) + 10
         cv.rectangle(
-            display,
-            (0, 0),
-            (legend_width, legend_height),
-            color=(0, 0, 0),
-            thickness=-1,
+            frame, (0, 0), (legend_width, legend_height), color=(0, 0, 0), thickness=-1
         )
         cv.rectangle(
-            display,
+            frame,
             (0, 0),
             (legend_width, legend_height),
             color=(255, 255, 255),
@@ -257,7 +255,7 @@ def label_chunks_in_frames(
         just = len(str(max(label_counter.values())))
         for i, label in enumerate(range(num_labels), start=1):
             cv.putText(
-                display,
+                frame,
                 f"{label}: {label_counter[label]: >{just}d}",
                 (10, (i * 40)),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
@@ -267,7 +265,7 @@ def label_chunks_in_frames(
                 lineType=cv.LINE_AA,
             )
 
-        yield display
+        yield frame
 
 
 def label_movie(
