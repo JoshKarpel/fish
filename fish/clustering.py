@@ -21,6 +21,8 @@ from . import io, bgnd, colors, vectorize
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+DEFAULT_BATCH_SIZE = 128
+
 
 def frame_to_chunks(frame, horizontal_chunk_size=64, vertical_chunk_size=64):
     return view_as_blocks(
@@ -71,7 +73,7 @@ def make_all_vectors_from_frames(frames, chunk_size, vectorizers):
             yield frame_idx, chunks_for_frame
 
 
-def make_batches_of_vectors(stacked, batch_size: int = 8192):
+def make_batches_of_vectors(stacked, batch_size: int = DEFAULT_BATCH_SIZE):
     full, last = divmod(len(stacked), batch_size)
     return (
         full + (1 if last != 0 else 0),
@@ -86,7 +88,7 @@ def _make_batches(stacked, batch_size, full, last):
         yield stacked[((i + 1) * batch_size) :]
 
 
-def make_all_batches(vector_stacks, batch_size: int = 8192):
+def make_all_batches(vector_stacks, batch_size: int = DEFAULT_BATCH_SIZE):
     num_batches = []
     batches_for_each_vectorizer = []
     for vector_stack in vector_stacks:
@@ -103,7 +105,7 @@ def make_all_batches(vector_stacks, batch_size: int = 8192):
 def do_pca(
     vector_stacks: List[np.ndarray],
     pca_dimensions: Union[int, Iterable[int]],
-    batch_size: int = 8192,
+    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> List[IncrementalPCA]:
     if isinstance(pca_dimensions, int):
         pca_dimensions = itertools.repeat(pca_dimensions)
@@ -128,7 +130,9 @@ def normalized_pca_transform(pca: IncrementalPCA, vector: np.ndarray) -> np.ndar
     return pca.transform(vector) / pca.singular_values_[0]
 
 
-def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size: int = 8192):
+def _do_cluster_via_kmeans(
+    vector_stacks, pcas, clusters, batch_size: int = DEFAULT_BATCH_SIZE
+):
     logger.debug(f"Created KMeans clusterer")
     kmeans = MiniBatchKMeans(n_clusters=clusters)
 
@@ -140,7 +144,9 @@ def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size: int = 8192
     return kmeans
 
 
-def _do_clustering_via_gmm(vector_stacks, pcas, clusters, batch_size: int = 8192):
+def _do_clustering_via_gmm(
+    vector_stacks, pcas, clusters, batch_size: int = DEFAULT_BATCH_SIZE
+):
     logger.debug(f"Created GMM clusterer")
     gmm = GaussianMixture(n_components=clusters, warm_start=True)
 
@@ -153,7 +159,7 @@ def _do_clustering_via_gmm(vector_stacks, pcas, clusters, batch_size: int = 8192
 
 
 def _get_transformed_batches_for_clustering(
-    vector_stacks, pcas, batch_size: int = 8192
+    vector_stacks, pcas, batch_size: int = DEFAULT_BATCH_SIZE
 ):
     num_batches, batch_iterators = make_all_batches(
         vector_stacks, batch_size=batch_size
@@ -279,6 +285,7 @@ def label_movie(
     chunk_size: int = 64,
     vectorizers: Collection[Callable] = (vectorize.sorted_ravel,),
     clustering_algorithm: str = "kmeans",
+    make_cluster_plot: bool = False,
 ):
     frames = io.load_or_read(input_movie)
     if include_frames is not None:
@@ -305,7 +312,8 @@ def label_movie(
     pcas = do_pca(vector_stacks, pca_dimensions)
     clusterer = do_clustering(vector_stacks, pcas, clusters, clustering_algorithm)
 
-    plot_clusters(output_path, vector_stacks, pcas, clusterer)
+    if make_cluster_plot:
+        plot_clusters(output_path, vector_stacks, pcas, clusterer)
 
     labelled_frames = label_chunks_in_frames(
         frames, pcas, clusterer, vectorizers, chunk_size
@@ -324,8 +332,7 @@ def plot_clusters(output_path, vector_stacks, pcas, clusterer):
     transformed = np.concatenate(transformed_vectors, axis=1)
 
     labels = clusterer.predict(transformed)
-    print(collections.Counter(labels))
-    c = [colors.HTML_COLORS[i] for i in labels]
+    c = [colors.HTML_COLORS[label] for label in labels]
 
     if isinstance(clusterer, MiniBatchKMeans):
         centers = clusterer.cluster_centers_
@@ -353,6 +360,17 @@ def plot_clusters(output_path, vector_stacks, pcas, clusterer):
 
     fig.tight_layout()
     op = str(output_path.with_name(f"{output_path.stem}__clusters.png"))
+    logger.debug(f"Writing cluster plot to {op}")
+    plt.savefig(op, dpi=600)
+    plt.close(fig)
+
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111)
+
+    ax.hist(transformed[:, 0])
+
+    fig.tight_layout()
+    op = str(output_path.with_name(f"{output_path.stem}__dist.png"))
     logger.debug(f"Writing cluster plot to {op}")
     plt.savefig(op, dpi=600)
 
