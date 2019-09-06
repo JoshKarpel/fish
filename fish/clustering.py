@@ -27,23 +27,31 @@ Window = np.ndarray
 Vector = np.ndarray
 
 
-@dataclasses.dataclass(frozen = True)
+@dataclasses.dataclass(frozen=True)
 class PixelCoordinates:
     x: int
     y: int
 
 
-Vectorizer = Callable[[Window, FrameIndex, PixelCoordinates, Mapping[FrameIndex, Mapping[PixelCoordinates, Window]]], Vector]
+Vectorizer = Callable[
+    [
+        Window,
+        FrameIndex,
+        PixelCoordinates,
+        Mapping[FrameIndex, Mapping[PixelCoordinates, Window]],
+    ],
+    Vector,
+]
 
 
 def frame_to_windows(frame: Frame, radius: int, step: int):
-    return _view_as_windows(
-        frame, window_shape = (2 * radius + 1), step = step,
-    )
+    return _view_as_windows(frame, window_shape=(2 * radius + 1), step=step)
 
 
-def windows_with_centers(frame: Frame, radius: int, step: int) -> Iterator[Tuple[PixelCoordinates, Window]]:
-    windows = frame_to_windows(frame, radius = radius, step = step)
+def windows_with_centers(
+    frame: Frame, radius: int, step: int
+) -> Iterator[Tuple[PixelCoordinates, Window]]:
+    windows = frame_to_windows(frame, radius=radius, step=step)
     num_x, num_y, radius, _ = windows.shape
     for v, h in itertools.product(range(num_x), range(num_y)):
         yield PixelCoordinates((v * step) + radius, (h * step) + radius), windows[v, h]
@@ -55,14 +63,13 @@ def windows_with_centers(frame: Frame, radius: int, step: int) -> Iterator[Tuple
 #     yield from (window for *_, window in windows_with_centers(frame, radius, step))
 #
 
+
 def stack_vectors(vectors):
-    return np.stack(vectors, axis = 0)
+    return np.stack(vectors, axis=0)
 
 
 def make_windows_from_frames(
-    frames: Iterator[Frame],
-    window_radius: int,
-    window_step: int
+    frames: Iterator[Frame], window_radius: int, window_step: int
 ) -> Mapping[FrameIndex, Mapping[PixelCoordinates, Window]]:
     windows = collections.defaultdict(dict)
     for frame_idx, frame in enumerate(frames):
@@ -82,84 +89,38 @@ def make_vectors_from_windows(
         logger.debug(f"Making vectors for frame {frame_idx}")
         coords_to_vecs_for_frame = {}
         for coords, window in coords_to_windows.items():
-            coords_to_vecs_for_frame[coords] = [vec(window, frame_idx, coords, windows) for vec in vectorizers]
+            coords_to_vecs_for_frame[coords] = [
+                vec(window, frame_idx, coords, windows) for vec in vectorizers
+            ]
         yield (frame_idx, coords_to_vecs_for_frame)
 
 
 def train_pcas(
     pcas_to_vectorizers: Mapping[IncrementalPCA, Vectorizer],
     windows: Mapping[FrameIndex, Mapping[PixelCoordinates, Window]],
-    batch_size = 2 ** 8,
+    batch_size=2 ** 8,
 ):
     batch_counter = collections.defaultdict(int)
     batches = collections.defaultdict(list)
-    for frame_idx, coords_to_vecs in make_vectors_from_windows(windows, list(pcas_to_vectorizers.values())):
+    for frame_idx, coords_to_vecs in make_vectors_from_windows(
+        windows, list(pcas_to_vectorizers.values())
+    ):
         for coords, vecs in coords_to_vecs.items():
             for pca_idx, (pca, vec) in enumerate(zip(pcas_to_vectorizers.keys(), vecs)):
                 batches[pca].append(vec)
                 if len(batches[pca]) >= batch_size:
                     batch_counter[pca] += 1
-                    logger.debug(f"Training PCA {pca_idx} on batch {batch_counter[pca]}")
+                    logger.debug(
+                        f"Training PCA {pca_idx} on batch {batch_counter[pca]}"
+                    )
                     stack = stack_vectors(batches.pop(pca))
                     pca.partial_fit(stack)
 
-# def make_batches_of_vectors(stacked, batch_size: int = 8192) -> Tuple[int, Iterator[np.ndarray]]:
-#     full, last = divmod(len(stacked), batch_size)
-#     return (
-#         full + (1 if last != 0 else 0),
-#         _make_batches(stacked, batch_size, full, last),
-#     )
-#
-#
-# def _make_batches(stacked, batch_size, full, last):
-#     for i in range(0, full):
-#         yield stacked[i * batch_size: (i + 1) * batch_size]
-#     if last != 0:
-#         yield stacked[((i + 1) * batch_size):]
-#
-#
-# def make_all_batches(vector_stacks, batch_size: int = 8192):
-#     num_batches = []
-#     batches_for_each_vectorizer = []
-#     for vector_stack in vector_stacks:
-#         num, batches = make_batches_of_vectors(vector_stack, batch_size = batch_size)
-#         num_batches.append(num)
-#         batches_for_each_vectorizer.append(batches)
-#
-#     if not len(set(num_batches)) == 1:
-#         raise Exception("Number of batches must match!")
-#
-#     return num_batches[0], batches_for_each_vectorizer
-#
-#
-# def do_pca(
-#     vector_stacks: List[np.ndarray],
-#     pca_dimensions: Union[int, Iterable[int]],
-#     batch_size: int = 8192,
-# ) -> List[IncrementalPCA]:
-#     if isinstance(pca_dimensions, int):
-#         pca_dimensions = itertools.repeat(pca_dimensions)
-#
-#     num_batches, batches_for_each_vectorizer = make_all_batches(
-#         vector_stacks, batch_size = batch_size
-#     )
-#     pcas = [
-#         IncrementalPCA(n_components = dims)
-#         for _, dims in zip(range(len(vector_stacks)), pca_dimensions)
-#     ]
-#     for idx, (pca, batches) in enumerate(zip(pcas, batches_for_each_vectorizer)):
-#         for batch in tqdm(
-#             batches, total = num_batches, desc = f"Performing PCA {idx + 1}/{len(pcas)}"
-#         ):
-#             pca.partial_fit(batch)
-#
-#     return pcas
-#
-#
-# def normalized_pca_transform(pca: IncrementalPCA, vector: np.ndarray) -> np.ndarray:
-#     return pca.transform(vector) / pca.singular_values_[0]
-#
-#
+
+def normalized_pca_transform(pca: IncrementalPCA, vector: np.ndarray) -> np.ndarray:
+    return pca.transform(vector) / pca.singular_values_[0]
+
+
 # def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size: int = 8192):
 #     logger.debug(f"Created KMeans clusterer")
 #     kmeans = MiniBatchKMeans(n_clusters = clusters)
