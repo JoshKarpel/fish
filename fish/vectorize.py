@@ -1,16 +1,16 @@
 import numpy as np
 
 
-def sorted_ravel(frame_idx, v, h, chunk, prev_chunks):
-    return np.sort(chunk, axis=None)
+def sorted_ravel(window, frame_idx, coords, windows):
+    return np.sort(window, axis=None)
 
 
-def sorted_diff(frame_idx, v, h, chunk, prev_chunks):
+def sorted_diff(window, frame_idx, coords, windows):
     if frame_idx != 0:
         return np.sort(
             np.abs(
-                chunk.astype(np.int32)
-                - prev_chunks[frame_idx - 1, v, h].astype(np.int32)
+                window.astype(np.int32)
+                - windows[frame_idx - 1][coords].astype(np.int32)
             ),
             axis=None,
         ).astype(np.uint8)
