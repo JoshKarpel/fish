@@ -13,7 +13,6 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-
 from tqdm import tqdm
 
 from . import io, bgnd, colors, vectorize
@@ -191,7 +190,11 @@ def label_chunks_in_frames(
     vectorizers: Collection[Callable],
     chunk_size,
     corner_blocks=5,
+    draw_on=None,
 ):
+    if draw_on is None:
+        draw_on = frames
+
     color_fractions = None
 
     label_counters = []
@@ -216,7 +219,7 @@ def label_chunks_in_frames(
 
         # this copy is extremely important, because we're going to mutate
         # this array for display
-        frame = frames[frame_idx].copy()
+        frame = draw_on[frame_idx].copy()
         if color_fractions is None:
             color_fractions = np.empty(frame.shape + (3,), dtype=np.float64)
 
@@ -279,29 +282,25 @@ def label_movie(
     output_path,
     pca_dimensions: int,
     clusters: int,
-    remove_background: bool = True,
     background_threshold: Union[int, float] = 0,
     include_frames: slice = None,
     chunk_size: int = 64,
     vectorizers: Collection[Callable] = (vectorize.sorted_ravel,),
     clustering_algorithm: str = "kmeans",
     make_cluster_plot: bool = False,
+    draw_on_original: bool = True,
 ):
     frames = io.load_or_read(input_movie)
     if include_frames is not None:
         frames = frames[include_frames]
-    if remove_background:
-        frames = np.stack(
-            list(bgnd.remove_background(frames, threshold=background_threshold)), axis=0
-        )
-    logger.debug(f"Frame stack shape (number of frames, height, width): {frames.shape}")
+    mod = np.stack(
+        list(bgnd.remove_background(frames, threshold=background_threshold)), axis=0
+    )
+    logger.debug(f"Frame stack shape (number of frames, height, width): {mod.shape}")
 
     vector_stacks = [
         stack_vectors(
-            [
-                vec
-                for *_, vec in make_vectors_from_frames(frames, chunk_size, vectorizer)
-            ]
+            [vec for *_, vec in make_vectors_from_frames(mod, chunk_size, vectorizer)]
         )
         for vectorizer in vectorizers
     ]
@@ -316,11 +315,16 @@ def label_movie(
         plot_clusters(output_path, vector_stacks, pcas, clusterer)
 
     labelled_frames = label_chunks_in_frames(
-        frames, pcas, clusterer, vectorizers, chunk_size
+        mod,
+        pcas,
+        clusterer,
+        vectorizers,
+        chunk_size,
+        draw_on=frames if draw_on_original else mod,
     )
     label_counters = next(labelled_frames)
 
-    io.make_movie(output_path, labelled_frames, num_frames=len(frames) - 1)
+    io.make_movie(output_path, labelled_frames, num_frames=len(mod) - 1, fps=10)
 
     make_labels_over_time_stackplot(output_path, label_counters, clusters)
 

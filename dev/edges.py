@@ -14,26 +14,30 @@ def make_frames(frames, lower, upper, smoothing, draw_on_original=True):
     open_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (4, 4))
     close_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (7, 7))
     backsub = cv.createBackgroundSubtractorKNN()
+    oj = fish.ObjectTracker()
 
-    for frame in frames:
+    for frame_idx, frame in enumerate(frames):
         mod = backsub.apply(frame)
         mod = cv.morphologyEx(mod, cv.MORPH_OPEN, open_kernel)
         mod = cv.morphologyEx(mod, cv.MORPH_CLOSE, close_kernel)
         edges = fish.get_edges(mod, lower, upper, smoothing)
         contours = fish.get_contours(edges)
+        if frame_idx > 10:
+            fish.track_objects(oj, contours)
 
-        if draw_on_original:
-            yield fish.draw_contours(frame, contours)
-        else:
-            yield fish.draw_contours(mod, contours)
+        img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
+        img = fish.draw_contours(img, contours)
+        img = fish.draw_objects(img, oj)
+        yield img
 
 
 if __name__ == "__main__":
     IN = Path(__file__).parent.parent / "data"
-    OUT = Path(__file__).parent / "out"
+    OUT = Path(__file__).parent / "out" / Path(__file__).stem
+    OUT.mkdir(exist_ok=True)
 
-    for movie in ["drug", "control"]:
-        frames = fish.load_or_read(IN / movie)[100:]
+    for movie in ["drug"]:
+        frames = fish.load_or_read(IN / movie)[100:500]
 
         # frames = fish.remove_background(frames, threshold=0)
 

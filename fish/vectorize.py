@@ -16,3 +16,7 @@ def sorted_diff(frame_idx, v, h, chunk, prev_chunks):
         ).astype(np.uint8)
     else:
         return None
+
+
+def sorted_ds(frame_idx, v, h, chunk, prev_chunks):
+    return np.sort(np.sqrt(sum(g ** 2 for g in np.gradient(chunk))), axis=None)
