@@ -48,31 +48,32 @@ BLUE = (255, 0, 0)
 GREEN = (0, 255, 0)
 RED = (0, 0, 255)
 
-# must be able to lock an object when it deregisters
-# after not being seen for a while
-# to stop very old tracks from picking up new entries
-# but still keep around the track
-
 
 class ObjectTracker:
     def __init__(self):
         self.objects = {}
         self._id_counter = itertools.count()
+        self.last_updated_frame = {}
+        self.locked = {}
 
     def _next_id(self):
         return next(self._id_counter)
 
-    def register(self, centroid):
+    def register(self, centroid, frame_idx):
         id = self._next_id()
         self.objects[id] = [centroid]
+        self.last_updated_frame[id] = frame_idx
+        self.locked[id] = False
 
-    def update(self, centroids):
+    def update(self, centroids, frame_idx):
         if len(self.objects) == 0:
             for centroid in centroids:
-                self.register(centroid)
+                self.register(centroid, frame_idx)
 
         centroids = centroids[:]
-        for object_id, positions in list(self.objects.items()):
+        for object_id, positions in (
+            (oid, pos) for oid, pos in self.objects.items() if not self.locked[oid]
+        ):
             if len(centroids) == 0:
                 return
             last_position = positions[-1]
@@ -83,12 +84,19 @@ class ObjectTracker:
             if vector_length(closest_centroid, last_position) <= 20:
                 positions.append(closest_centroid)
                 centroids.pop(centroid_idx)
+                self.last_updated_frame[object_id] = frame_idx
 
         for centroid in centroids:
-            self.register(centroid)
+            self.register(centroid, frame_idx)
+
+    def clean(self, frame_idx):
+        self.objects = {oid: c[-100:] for oid, c in self.objects.items()}
+        for oid in self.objects:
+            if self.last_updated_frame[oid] + 10 < frame_idx:
+                self.locked[oid] = True
 
 
-def track_objects(object_tracker, contours):
+def track_objects(object_tracker, contours, frame_idx):
     centroids = []
     for c in contours:
         moments = cv.moments(c, binaryImage=True)
@@ -98,7 +106,7 @@ def track_objects(object_tracker, contours):
         pos = np.array([cx, cy])
         centroids.append(pos)
 
-    object_tracker.update(centroids)
+    object_tracker.update(centroids, frame_idx)
 
 
 def draw_contours(frame, contours):
@@ -147,10 +155,14 @@ def draw_contours(frame, contours):
 def draw_objects(frame, object_tracker):
     cv.polylines(
         frame,
-        [np.vstack(curve) for curve in object_tracker.objects.values()],
+        [
+            np.vstack(curve)
+            for oid, curve in object_tracker.objects.items()
+            if not object_tracker.locked[oid]
+        ],
         isClosed=False,
         color=RED,
-        thickness=2,
+        thickness=1,
         lineType=cv.LINE_AA,
     )
 

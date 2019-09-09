@@ -23,7 +23,8 @@ def make_frames(frames, lower, upper, smoothing, draw_on_original=True):
         edges = fish.get_edges(mod, lower, upper, smoothing)
         contours = fish.get_contours(edges)
         if frame_idx > 10:
-            fish.track_objects(oj, contours)
+            fish.track_objects(oj, contours, frame_idx)
+            oj.clean(frame_idx)
 
         img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
         img = fish.draw_contours(img, contours)
@@ -36,8 +37,8 @@ if __name__ == "__main__":
     OUT = Path(__file__).parent / "out" / Path(__file__).stem
     OUT.mkdir(exist_ok=True)
 
-    for movie in ["drug"]:
-        frames = fish.load_or_read(IN / movie)[100:500]
+    for movie in ["drug", "control"]:
+        frames = fish.load_or_read(IN / movie)[100:]
 
         # frames = fish.remove_background(frames, threshold=0)
 
