@@ -4,6 +4,8 @@ from pathlib import Path
 
 import numpy as np
 from sklearn.decomposition import IncrementalPCA
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.mixture import GaussianMixture
 
 import fish
 
@@ -12,7 +14,7 @@ logging.basicConfig(
 )
 
 frames = fish.load_or_read(Path(__file__).parent.parent / "data" / "drug.avi")
-frames = frames[100:110]
+frames = frames[100:105]
 print(frames.shape)
 
 pcas_to_vectorizers = {
@@ -21,7 +23,8 @@ pcas_to_vectorizers = {
 }
 
 windows = fish.make_windows_from_frames(frames, window_radius=25, window_step=20)
-# for frame_idx, coords_to_windows in windows.items():
-#     print(frame_idx, len(coords_to_windows))
 
 fish.train_pcas(pcas_to_vectorizers, windows)
+
+clusterer = GaussianMixture(n_components=4, warm_start=True)
+fish.train_clusterer(clusterer, pcas_to_vectorizers, windows)

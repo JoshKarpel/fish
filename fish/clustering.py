@@ -117,149 +117,125 @@ def train_pcas(
                     pca.partial_fit(stack)
 
 
+def train_clusterer(clusterer, pcas_to_vectorizers, windows, batch_size=2 ** 8):
+    batch_counter = 0
+    batch = []
+    for frame_idx, coords_to_vecs in make_vectors_from_windows(
+        windows, list(pcas_to_vectorizers.values())
+    ):
+        for coords, vecs in coords_to_vecs.items():
+            transformed_stacked_vecs = direct_sum(
+                [
+                    normalized_pca_transform(pca, vec)
+                    for pca, vec in zip(pcas_to_vectorizers.keys(), vecs)
+                ]
+            )
+            batch.append(transformed_stacked_vecs)
+            if len(batch) >= batch_size:
+                batch_counter += 1
+                logger.debug(f"Training clusterer on batch {batch_counter}")
+                if isinstance(clusterer, GaussianMixture):
+                    stack = np.concatenate(batch, axis=0)
+                    clusterer.fit(stack)
+                batch = []
+
+
 def normalized_pca_transform(pca: IncrementalPCA, vector: np.ndarray) -> np.ndarray:
+    if len(vector.shape) == 1:
+        vector = vector.reshape(1, -1)
     return pca.transform(vector) / pca.singular_values_[0]
 
 
-# def _do_cluster_via_kmeans(vector_stacks, pcas, clusters, batch_size: int = 8192):
-#     logger.debug(f"Created KMeans clusterer")
-#     kmeans = MiniBatchKMeans(n_clusters = clusters)
-#
-#     for batch in _get_transformed_batches_for_clustering(
-#         vector_stacks, pcas, batch_size
-#     ):
-#         kmeans.partial_fit(batch)
-#
-#     return kmeans
-#
-#
-# def _do_clustering_via_gmm(vector_stacks, pcas, clusters, batch_size: int = 8192):
-#     logger.debug(f"Created GMM clusterer")
-#     gmm = GaussianMixture(n_components = clusters, warm_start = True)
-#
-#     for batch in _get_transformed_batches_for_clustering(
-#         vector_stacks, pcas, batch_size
-#     ):
-#         gmm.fit(batch)
-#
-#     return gmm
-#
-#
-# def _get_transformed_batches_for_clustering(
-#     vector_stacks, pcas, batch_size: int = 8192
-# ):
-#     num_batches, batch_iterators = make_all_batches(
-#         vector_stacks, batch_size = batch_size
-#     )
-#     for batches in tqdm(
-#         zip(*batch_iterators), total = num_batches, desc = "Performing clustering"
-#     ):
-#         transformed_batches = [
-#             normalized_pca_transform(pca, batch) for pca, batch in zip(pcas, batches)
-#         ]
-#
-#         yield np.concatenate(transformed_batches, axis = 1)
-#
-#
-# def do_clustering(vector_stack, pca, clusters, clustering_algorithm):
-#     return _CLUSTERING_ALGORITHMS[clustering_algorithm](vector_stack, pca, clusters)
-#
-#
-# _CLUSTERING_ALGORITHMS = {
-#     "kmeans": _do_cluster_via_kmeans,
-#     "gmm": _do_clustering_via_gmm,
-# }
-#
-#
-# def label_chunks_in_frames(
-#     frames,
-#     pcas,
-#     clusterer,
-#     vectorizers: Collection[Callable],
-#     chunk_size,
-#     corner_blocks = 5,
-# ):
-#     color_fractions = None
-#
-#     label_counters = []
-#     yield label_counters
-#     for frame_idx, coords_and_vecs in make_vectors_from_frames(
-#         frames, chunk_size = chunk_size, vectorizers = vectorizers
-#     ):
-#         vec_stacks = [[] for _ in pcas]
-#         coords = []
-#         for chunk_coords, chunk_vecs in coords_and_vecs:
-#             coords.append(chunk_coords)
-#             for vec, stack in zip(chunk_vecs, vec_stacks):
-#                 stack.append(vec)
-#
-#         transformed_stacks = []
-#         for pca, vec_stack in zip(pcas, vec_stacks):
-#             vec_stack = stack_vectors(vec_stack)
-#             transformed_stacks.append(normalized_pca_transform(pca, vec_stack))
-#
-#         cat_stacks = np.concatenate(transformed_stacks, axis = 1)
-#         labels = clusterer.predict(cat_stacks)
-#
-#         # this copy is extremely important, because we're going to mutate
-#         # this array for display
-#         frame = frames[frame_idx].copy()
-#         if color_fractions is None:
-#             color_fractions = np.empty(frame.shape + (3,), dtype = np.float64)
-#
-#         for (v, h), label in zip(coords, labels):
-#             vslice = slice((v * chunk_size), ((v + 1) * chunk_size))
-#             hslice = slice((h * chunk_size), ((h + 1) * chunk_size))
-#
-#             frame[
-#             (v * chunk_size): (v * chunk_size) + corner_blocks,
-#             (h * chunk_size): (h * chunk_size) + corner_blocks,
-#             ] = 255
-#             color_fractions[vslice, hslice] = colors.fractions(
-#                 *colors.BGR_COLORS[label]
-#             )
-#
-#         # apply label colors to frame
-#         frame = (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
-#
-#         # count number of each label in frame
-#         label_counter = collections.Counter(labels)
-#         label_counters.append(label_counter)
-#
-#         # draw legend box
-#         if isinstance(clusterer, MiniBatchKMeans):
-#             num_labels = len(clusterer.cluster_centers_)
-#         elif isinstance(clusterer, GaussianMixture):
-#             num_labels = len(clusterer.means_)
-#         legend_width = 150
-#         legend_height = (num_labels * 40) + 10
-#         cv.rectangle(
-#             frame, (0, 0), (legend_width, legend_height), color = (0, 0, 0), thickness = -1
-#         )
-#         cv.rectangle(
-#             frame,
-#             (0, 0),
-#             (legend_width, legend_height),
-#             color = (255, 255, 255),
-#             thickness = 1,
-#         )
-#
-#         # draw legend text
-#         just = len(str(max(label_counter.values())))
-#         for i, label in enumerate(range(num_labels), start = 1):
-#             cv.putText(
-#                 frame,
-#                 f"{label}: {label_counter[label]: >{just}d}",
-#                 (10, (i * 40)),
-#                 fontFace = cv.FONT_HERSHEY_DUPLEX,
-#                 fontScale = 1,
-#                 color = 255 * colors.fractions(*colors.BGR_COLORS[label]),
-#                 thickness = 1,
-#                 lineType = cv.LINE_AA,
-#             )
-#
-#         yield frame
-#
+def direct_sum(vecs):
+    return np.concatenate(vecs, axis=1)
+
+
+def label_chunks_in_frames(
+    windows, pcas_to_vectorizers, clusterer, chunk_size, corner_blocks=5
+):
+    color_fractions = None
+
+    # label_counters = []
+    # yield label_counters
+    for frame_idx, coords_to_vecs in make_vectors_from_windows(
+        windows, list(pcas_to_vectorizers.values())
+    ):
+        for coords, vecs in coords_to_vecs.items():
+        vec_stacks = [[] for _ in pcas]
+        coords = []
+        for chunk_coords, chunk_vecs in coords_and_vecs:
+            coords.append(chunk_coords)
+            for vec, stack in zip(chunk_vecs, vec_stacks):
+                stack.append(vec)
+
+        transformed_stacks = []
+        for pca, vec_stack in zip(pcas, vec_stacks):
+            vec_stack = stack_vectors(vec_stack)
+            transformed_stacks.append(normalized_pca_transform(pca, vec_stack))
+
+        cat_stacks = np.concatenate(transformed_stacks, axis=1)
+        labels = clusterer.predict(cat_stacks)
+
+        # this copy is extremely important, because we're going to mutate
+        # this array for display
+        frame = frames[frame_idx].copy()
+        if color_fractions is None:
+            color_fractions = np.empty(frame.shape + (3,), dtype=np.float64)
+
+        for (v, h), label in zip(coords, labels):
+            vslice = slice((v * chunk_size), ((v + 1) * chunk_size))
+            hslice = slice((h * chunk_size), ((h + 1) * chunk_size))
+
+            frame[
+                (v * chunk_size) : (v * chunk_size) + corner_blocks,
+                (h * chunk_size) : (h * chunk_size) + corner_blocks,
+            ] = 255
+            color_fractions[vslice, hslice] = colors.fractions(
+                *colors.BGR_COLORS[label]
+            )
+
+        # apply label colors to frame
+        frame = (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
+
+        # count number of each label in frame
+        label_counter = collections.Counter(labels)
+        label_counters.append(label_counter)
+
+        # draw legend box
+        if isinstance(clusterer, MiniBatchKMeans):
+            num_labels = len(clusterer.cluster_centers_)
+        elif isinstance(clusterer, GaussianMixture):
+            num_labels = len(clusterer.means_)
+        legend_width = 150
+        legend_height = (num_labels * 40) + 10
+        cv.rectangle(
+            frame, (0, 0), (legend_width, legend_height), color=(0, 0, 0), thickness=-1
+        )
+        cv.rectangle(
+            frame,
+            (0, 0),
+            (legend_width, legend_height),
+            color=(255, 255, 255),
+            thickness=1,
+        )
+
+        # draw legend text
+        just = len(str(max(label_counter.values())))
+        for i, label in enumerate(range(num_labels), start=1):
+            cv.putText(
+                frame,
+                f"{label}: {label_counter[label]: >{just}d}",
+                (10, (i * 40)),
+                fontFace=cv.FONT_HERSHEY_DUPLEX,
+                fontScale=1,
+                color=255 * colors.fractions(*colors.BGR_COLORS[label]),
+                thickness=1,
+                lineType=cv.LINE_AA,
+            )
+
+        yield frame
+
+
 #
 # def label_movie(
 #     input_movie,
