@@ -14,7 +14,7 @@ logging.basicConfig()
 def make_frames(frames, lower, upper, smoothing):
     for frame in frames:
         edges = fish.get_edges(frame, lower, upper, smoothing)
-        yield fish.draw_bounding_circles(frame, edges)
+        yield fish.get_contours(frame, edges)
 
 
 @htmap.mapped(map_options=htmap.MapOptions(request_disk="10GB", request_memory="16GB"))

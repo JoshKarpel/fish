@@ -7,29 +7,40 @@ import cv2 as cv
 
 import fish
 
-
 logging.basicConfig()
 
 
-def make_frames(frames, lower, upper, smoothing):
-    kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
-    curves = []
-    for frame in frames:
-        frame = cv.morphologyEx(frame, cv.MORPH_CLOSE, kernel)
-        edges = fish.get_edges(frame, lower, upper, smoothing)
-        yield fish.draw_bounding_circles(frame, edges, curves)
+def make_frames(frames, lower, upper, smoothing, draw_on_original=True):
+    open_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (4, 4))
+    close_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (7, 7))
+    backsub = cv.createBackgroundSubtractorKNN()
 
-        curves = [curve[-100:] for curve in curves]
+    for frame in frames:
+        mod = backsub.apply(frame)
+        mod = cv.morphologyEx(mod, cv.MORPH_OPEN, open_kernel)
+        mod = cv.morphologyEx(mod, cv.MORPH_CLOSE, close_kernel)
+        edges = fish.get_edges(mod, lower, upper, smoothing)
+        contours = fish.get_contours(edges)
+
+        if draw_on_original:
+            yield fish.draw_contours(frame, contours)
+        else:
+            yield fish.draw_contours(mod, contours)
 
 
 if __name__ == "__main__":
     IN = Path(__file__).parent.parent / "data"
     OUT = Path(__file__).parent / "out"
 
-    frames = fish.load_or_read(IN / "control")[100:]
+    for movie in ["drug", "control"]:
+        frames = fish.load_or_read(IN / movie)[100:]
 
-    op = fish.make_movie(
-        OUT / f"edge_test",
-        frames=make_frames(fish.remove_background(frames, threshold=0), 60, 170, 3),
-        num_frames=len(frames),
-    )
+        # frames = fish.remove_background(frames, threshold=0)
+
+        for d in [True, False]:
+            op = fish.make_movie(
+                OUT / f"edge_test__{movie}__draw_on_original={d}",
+                frames=make_frames(frames, 100, 200, 5, draw_on_original=d),
+                num_frames=len(frames),
+                fps=5,
+            )

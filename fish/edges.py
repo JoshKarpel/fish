@@ -24,49 +24,64 @@ def vector_length(a, b) -> float:
     return np.linalg.norm(a - b)
 
 
-def draw_bounding_circles(
-    frame: np.ndarray, edges: np.ndarray, curves, track_motion=False
-):
+def get_contours(edges: np.ndarray):
     image, contours, hierarchy = cv.findContours(
         edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE
     )
 
-    img = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
+    return contours
 
-    img = cv.drawContours(img, contours, -1, color=(255, 0, 0), thickness=1)
 
+BLUE = (255, 0, 0)
+GREEN = (0, 255, 0)
+RED = (0, 0, 255)
+
+
+def draw_contours(frame, contours):
+    frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
+
+    centers = []
+    areas = []
+    boxes = []
     for c in contours:
-        moments = cv.moments(c)
+        moments = cv.moments(c, binaryImage=True)
         area = moments["m00"]
-        if area < 16:
+        if area <= 10:
             continue
+        areas.append(area)
 
         cx = int(moments["m10"] / moments["m00"])
         cy = int(moments["m01"] / moments["m00"])
         pos = np.array([cx, cy])
+        centers.append(pos)
 
         rect = cv.minAreaRect(c)
         box = cv.boxPoints(rect)
         box = np.int0(box)
-        cv.drawContours(img, [box], 0, (0, 255, 0), 1)
+        boxes.append(box)
 
-        if len(curves) == 0:
-            curves.append([pos])
-
-        if track_motion:
-            nearest_curve = min(curves, key=lambda curve: vector_length(curve[-1], pos))
-            if vector_length(nearest_curve[-1], pos) < 50:
-                nearest_curve.append(pos)
-            else:
-                curves.append([pos])
-
-    if track_motion:
-        cv.polylines(
-            img,
-            [np.vstack(curve) for curve in curves],
-            color=(0, 0, 255),
+    frame = cv.drawContours(
+        frame, contours, -1, color=RED, thickness=1, lineType=cv.LINE_AA
+    )
+    cv.drawContours(frame, boxes, -1, color=GREEN, thickness=2, lineType=cv.LINE_AA)
+    for (x, y), area in zip(centers, areas):
+        cv.rectangle(
+            frame,
+            (x - 1, y - 1),
+            (x + 1, y + 1),
+            color=BLUE,
+            thickness=-1,
+            lineType=cv.LINE_AA,
+        )
+        cv.putText(
+            frame,
+            str(area),
+            (x + 15, y - 15),
+            fontFace=cv.FONT_HERSHEY_DUPLEX,
+            fontScale=1,
+            color=BLUE,
             thickness=1,
-            isClosed=False,
+            lineType=cv.LINE_AA,
         )
 
-    return img
+    return frame
