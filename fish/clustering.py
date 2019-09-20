@@ -191,6 +191,7 @@ def label_chunks_in_frames(
     chunk_size,
     corner_blocks=5,
     draw_on=None,
+    cutoff=None,
 ):
     if draw_on is None:
         draw_on = frames
@@ -217,6 +218,22 @@ def label_chunks_in_frames(
         cat_stacks = np.concatenate(transformed_stacks, axis=1)
         labels = clusterer.predict(cat_stacks)
 
+        max_counts_per_chunk = (chunk_size ** 2) * 255
+        fractional_counts = np.array(
+            [
+                np.sum(chunk) / max_counts_per_chunk
+                for *_, chunk in iterate_over_chunks(
+                    frame_to_chunks(
+                        frames[frame_idx],
+                        horizontal_chunk_size=chunk_size,
+                        vertical_chunk_size=chunk_size,
+                    )
+                )
+            ]
+        )
+        is_below_cutoff = fractional_counts < cutoff
+        labels[is_below_cutoff] = -1
+
         # this copy is extremely important, because we're going to mutate
         # this array for display
         frame = draw_on[frame_idx].copy()
@@ -227,13 +244,15 @@ def label_chunks_in_frames(
             vslice = slice((v * chunk_size), ((v + 1) * chunk_size))
             hslice = slice((h * chunk_size), ((h + 1) * chunk_size))
 
-            frame[
-                (v * chunk_size) : (v * chunk_size) + corner_blocks,
-                (h * chunk_size) : (h * chunk_size) + corner_blocks,
-            ] = 255
-            color_fractions[vslice, hslice] = colors.fractions(
-                *colors.BGR_COLORS[label]
-            )
+            if label >= 0:
+                frame[
+                    (v * chunk_size) : (v * chunk_size) + corner_blocks,
+                    (h * chunk_size) : (h * chunk_size) + corner_blocks,
+                ] = 255
+                color_fractions[vslice, hslice] = colors.BGR_FRACTIONS[label]
+            else:
+                frame[vslice, hslice] = 255
+                color_fractions[vslice, hslice] = colors.BGR_GRAY_FRACTIONS
 
         # apply label colors to frame
         frame = (color_fractions * frame[..., np.newaxis]).astype(np.uint8)
@@ -247,6 +266,7 @@ def label_chunks_in_frames(
             num_labels = len(clusterer.cluster_centers_)
         elif isinstance(clusterer, GaussianMixture):
             num_labels = len(clusterer.means_)
+        num_labels += 1  # account for bgnd "label"
         legend_width = 150
         legend_height = (num_labels * 40) + 10
         cv.rectangle(
@@ -262,19 +282,48 @@ def label_chunks_in_frames(
 
         # draw legend text
         just = len(str(max(label_counter.values())))
-        for i, label in enumerate(range(num_labels), start=1):
+        for i, label in enumerate(range(-1, num_labels), start=1):
             cv.putText(
                 frame,
                 f"{label}: {label_counter[label]: >{just}d}",
                 (10, (i * 40)),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=1,
-                color=255 * colors.fractions(*colors.BGR_COLORS[label]),
+                color=255
+                * (
+                    colors.BGR_FRACTIONS[label]
+                    if label >= 0
+                    else colors.BGR_GRAY_FRACTIONS
+                ),
                 thickness=1,
                 lineType=cv.LINE_AA,
             )
 
         yield frame
+
+
+def get_fractional_counts(frames, chunk_size):
+    vectors = list(
+        v
+        for *_, v in make_vectors_from_frames(
+            frames, chunk_size=chunk_size, vectorizer=vectorize.sorted_ravel
+        )
+    )
+
+    vectors = stack_vectors(vectors)
+
+    max_counts_per_chunk = (chunk_size ** 2) * 255
+    fractional_counts = (
+        np.sum(vectors, axis=1).astype(np.float64) / max_counts_per_chunk
+    )
+
+    return fractional_counts
+
+
+def calculate_cutoff(fractional_counts, cutoff_quantile):
+    cutoff = np.quantile(fractional_counts, cutoff_quantile)
+
+    return cutoff
 
 
 def label_movie(
@@ -287,6 +336,7 @@ def label_movie(
     chunk_size: int = 64,
     vectorizers: Collection[Callable] = (vectorize.sorted_ravel,),
     clustering_algorithm: str = "kmeans",
+    cutoff_quantile=0.95,
     make_cluster_plot: bool = False,
     draw_on_original: bool = True,
 ):
@@ -298,12 +348,23 @@ def label_movie(
     )
     logger.debug(f"Frame stack shape (number of frames, height, width): {mod.shape}")
 
+    fractional_counts = get_fractional_counts(mod, chunk_size=chunk_size)
+    cutoff = calculate_cutoff(fractional_counts, cutoff_quantile=cutoff_quantile)
+    is_above_cutoff = fractional_counts > cutoff
+
     vector_stacks = [
         stack_vectors(
-            [vec for *_, vec in make_vectors_from_frames(mod, chunk_size, vectorizer)]
+            [
+                vec
+                for idx, (*_, vec) in enumerate(
+                    make_vectors_from_frames(mod, chunk_size, vectorizer)
+                )
+                if is_above_cutoff[idx]
+            ]
         )
         for vectorizer in vectorizers
     ]
+
     logger.debug(
         f"Vector stack shapes (number of vectors, vector length): {[vs.shape for vs in vector_stacks]}"
     )
@@ -321,6 +382,7 @@ def label_movie(
         vectorizers,
         chunk_size,
         draw_on=frames if draw_on_original else mod,
+        cutoff=cutoff,
     )
     label_counters = next(labelled_frames)
 

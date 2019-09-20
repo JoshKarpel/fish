@@ -15,12 +15,13 @@ if __name__ == "__main__":
     for dims, clusters, cluster_alg, vectorizer, draw in itertools.product(
         [1, 2],
         [3, 4, 6],
-        ["kmeans", "gmm"],
+        ["gmm"],
         [
-            # [fish.sorted_ravel, fish.sorted_diff],
-            [fish.sorted_ravel, fish.sorted_diff, fish.sorted_ds]
+            [fish.sorted_ravel, fish.sorted_diff],
+            [fish.sorted_ravel, fish.sorted_diff, fish.sorted_ds],
         ],
         [True, False],
+        [0.8, 0.9, 0.95],
     ):
         print(dims, clusters, cluster_alg, vectorizer)
         fish.label_movie(
@@ -33,6 +34,7 @@ if __name__ == "__main__":
             include_frames=slice(-600, -400),
             vectorizers=vectorizer,
             chunk_size=32,
+            cutoff_quantile=0.95,
             clustering_algorithm=cluster_alg,
             make_cluster_plot=True,
             draw_on_original=draw,

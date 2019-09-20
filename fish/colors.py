@@ -31,7 +31,11 @@ HTML_COLORS = [
     "#66a61e",
     "#e6ab02",
     "#a6761d",
-    "#666666",
 ]
 RGB_COLORS = [html_to_rgb(c) for c in HTML_COLORS]
 BGR_COLORS = [rgb_to_bgr(rgb) for rgb in RGB_COLORS]
+
+BGR_FRACTIONS = [fractions(*bgr) for bgr in BGR_COLORS]
+
+GRAY = "#666666"
+BGR_GRAY_FRACTIONS = fractions(*rgb_to_bgr(html_to_rgb(GRAY)))
