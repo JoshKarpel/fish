@@ -12,7 +12,14 @@ if __name__ == "__main__":
     OUT = Path(__file__).parent / "out" / Path(__file__).stem
     OUT.mkdir(exist_ok=True)
 
-    for dims, clusters, cluster_alg, vectorizer, draw in itertools.product(
+    for (
+        dims,
+        clusters,
+        cluster_alg,
+        vectorizer,
+        draw,
+        cutoff_quantile,
+    ) in itertools.product(
         [1, 2],
         [3, 4, 6],
         ["gmm"],
@@ -34,7 +41,7 @@ if __name__ == "__main__":
             include_frames=slice(-600, -400),
             vectorizers=vectorizer,
             chunk_size=32,
-            cutoff_quantile=0.95,
+            cutoff_quantile=cutoff_quantile,
             clustering_algorithm=cluster_alg,
             make_cluster_plot=True,
             draw_on_original=draw,
