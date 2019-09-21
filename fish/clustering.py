@@ -439,6 +439,7 @@ def plot_clusters(output_path, vector_stacks, pcas, clusterer):
     op = str(output_path.with_name(f"{output_path.stem}__dist.png"))
     logger.debug(f"Writing cluster plot to {op}")
     plt.savefig(op, dpi=600)
+    plt.close()
 
 
 def make_labels_over_time_stackplot(output_path, label_counts_over_time, num_labels):
@@ -469,3 +470,4 @@ def make_labels_over_time_stackplot(output_path, label_counts_over_time, num_lab
     op = str(output_path.with_name(f"{output_path.stem}__labels_over_time.png"))
     logger.debug(f"Writing cluster plot to {op}")
     plt.savefig(op, dpi=600)
+    plt.close()
