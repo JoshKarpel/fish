@@ -112,6 +112,7 @@ def track_objects(object_tracker, contours, frame_idx):
 def draw_contours(frame, contours):
     centroids = []
     areas = []
+    perimeters = []
     boxes = []
     for c in contours:
         moments = cv.moments(c, binaryImage=True)
@@ -123,13 +124,16 @@ def draw_contours(frame, contours):
         pos = np.array([cx, cy])
         centroids.append(pos)
 
+        perimeter = cv.arcLength(c, closed=True)
+        perimeters.append(round(perimeter, 2))
+
         rect = cv.minAreaRect(c)
         box = cv.boxPoints(rect)
         box = np.int0(box)
         boxes.append(box)
 
     cv.drawContours(frame, boxes, -1, color=GREEN, thickness=2, lineType=cv.LINE_AA)
-    for (x, y), area in zip(centroids, areas):
+    for (x, y), area, perimeter in zip(centroids, areas, perimeters):
         cv.rectangle(
             frame,
             (x - 1, y - 1),
@@ -145,6 +149,16 @@ def draw_contours(frame, contours):
             fontFace=cv.FONT_HERSHEY_DUPLEX,
             fontScale=1,
             color=BLUE,
+            thickness=1,
+            lineType=cv.LINE_AA,
+        )
+        cv.putText(
+            frame,
+            str(perimeter),
+            (x + 15, y + 15),
+            fontFace=cv.FONT_HERSHEY_DUPLEX,
+            fontScale=1,
+            color=GREEN,
             thickness=1,
             lineType=cv.LINE_AA,
         )

@@ -20,15 +20,15 @@ if __name__ == "__main__":
         draw,
         cutoff_quantile,
     ) in itertools.product(
-        [1, 2, 3],
+        [1, 5],
         [3, 4, 6],
         ["gmm"],
         [
-            [fish.sorted_ravel, fish.sorted_diff],
-            [fish.sorted_ravel, fish.sorted_diff, fish.sorted_ds],
+            # [fish.sorted_ravel, fish.sorted_diff],
+            [fish.sorted_ravel, fish.sorted_diff, fish.sorted_ds]
         ],
-        [True, False],
-        [0.0, 0.8, 0.9, 0.95],
+        [True],
+        [0.9, 0.95],
     ):
         print(dims, clusters, cluster_alg, vectorizers, cutoff_quantile)
         op = (
