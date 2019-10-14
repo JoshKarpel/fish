@@ -121,9 +121,10 @@ class ObjectTracker:
         contours = contours[:]
 
         # try to assign a contour to each unlocked object track
-        for track in (track for track in self.tracks.values() if not track.is_locked):
+        for track in (t for t in self.tracks.values() if not t.is_locked):
             if len(contours) == 0:
                 return
+
             last_position = track.positions[-1]
             closest_centroid_idx, closest_centroid = min(
                 enumerate(contours),
