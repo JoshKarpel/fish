@@ -23,6 +23,7 @@ def make_frames(
     draw_on_original=True,
     areas_out=None,
     velocities_out=None,
+    velocity_histogram_out=None,
 ):
     open_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (4, 4))
     close_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (7, 7))
@@ -44,14 +45,56 @@ def make_frames(
             tracker.clean(frame_idx)
 
         # produce the movie frame that we'll actually write out to disk
-        # img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
-        # img = fish.draw_bounding_rectangles(img, contours)
-        # img = fish.draw_live_object_tracks(img, tracker)
-        # yield img
-        yield None
+        img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
+        img = fish.draw_bounding_rectangles(img, contours)
+        img = fish.draw_live_object_tracks(img, tracker)
+        yield img
+        # yield None
 
     make_velocities_over_time(velocities_out, tracker)
     make_areas_over_time(areas_out, tracker)
+
+    make_velocity_histogram_over_time(
+        velocity_histogram_out, tracker, num_frames=frame_idx
+    )
+
+
+def make_velocity_histogram_over_time(out, tracker, num_frames):
+    padded_velocities = []
+    for oid, track in tracker.tracks.items():
+        idxs = np.array(track.frame_idxs)
+        areas = np.array(track.areas)
+
+        if len(idxs) < 10:
+            # if len(idxs) < 10 or not np.all(areas > 50):
+            continue
+
+        velocities = np.linalg.norm(np.diff(np.vstack(track.positions), axis=0), axis=1)
+
+        padded = np.zeros(num_frames) * np.NaN
+        padded[idxs[:-1]] = velocities
+        padded_velocities.append(padded)
+
+    velocities = np.vstack(padded_velocities)
+    rng = (0, np.nanmax(velocities))
+
+    velocity_hist_per_frame = [
+        np.histogram(v[~np.isnan(v)], bins=10, range=rng)[0]
+        for v in velocities.transpose()
+    ]
+    velocity_hist_per_frame = np.vstack(velocity_hist_per_frame).T
+
+    fig = plt.figure(figsize=(12, 8), dpi=600)
+    ax = fig.add_subplot(111)
+
+    mesh = ax.pcolormesh(velocity_hist_per_frame, norm=plt.Normalize(vmin=0, vmax=10))
+
+    plt.colorbar(mappable=mesh, ax=ax)
+
+    ax.set_xlabel("frame index")
+    ax.set_ylabel("velocity bin")
+
+    plt.savefig(out)
 
 
 def make_velocities_over_time(out, tracker):
@@ -62,7 +105,8 @@ def make_velocities_over_time(out, tracker):
         idxs = np.array(track.frame_idxs)
         areas = np.array(track.areas)
 
-        if len(idxs) < 10 or not np.all(areas > 100):
+        if len(idxs) < 10:
+            # if len(idxs) < 10 or not np.all(areas > 100):
             continue
 
         velocities = np.linalg.norm(np.diff(np.vstack(track.positions), axis=0), axis=1)
@@ -84,7 +128,8 @@ def make_areas_over_time(out, tracker):
         idxs = np.array(track.frame_idxs)
         areas = np.array(track.areas)
 
-        if len(idxs) < 10 or not np.all(areas > 100):
+        if len(idxs) < 10:
+            # if len(idxs) < 10 or not np.all(areas > 100):
             continue
 
         ax.plot(idxs, areas, color=np.random.rand(3))
@@ -113,14 +158,15 @@ if __name__ == "__main__":
             draw_on_original=draw,
             areas_out=OUT / f"{movie}_areas.png",
             velocities_out=OUT / f"{movie}_velocities.png",
+            velocity_histogram_out=OUT / f"{movie}_velocity_histogram.png",
         )
 
-        # op = fish.make_movie(
-        #     OUT / f"edge_test__{movie}__draw_on_original={draw}",
-        #     frames=it,
-        #     num_frames=len(frames),
-        #     fps=5,
-        # )
+        op = fish.make_movie(
+            OUT / f"{movie}__edge_test__draw_on_original={draw}",
+            frames=it,
+            num_frames=len(frames),
+            fps=5,
+        )
 
-        for frame in tqdm(it, total=len(frames)):
-            pass
+        # for frame in tqdm(it, total=len(frames)):
+        #     pass
