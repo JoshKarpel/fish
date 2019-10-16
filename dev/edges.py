@@ -4,6 +4,8 @@ from pathlib import Path
 import itertools
 
 import numpy as np
+import scipy as sp
+import scipy.signal as sig
 import cv2 as cv
 
 import matplotlib.pyplot as plt
@@ -76,20 +78,42 @@ def make_velocity_histogram_over_time(out, tracker, num_frames):
         padded_velocities.append(padded)
 
     velocities = np.vstack(padded_velocities)
+    percentiles = [10, 25, 50, 75, 90]
+    percentile_style = {10: ":", 25: "--", 50: "-", 75: "--", 90: ":"}
+    velocity_percentiles = np.nanpercentile(velocities, percentiles, axis=0)
     rng = (0, np.nanmax(velocities))
 
+    num_bins = 10
     velocity_hist_per_frame = [
-        np.histogram(v[~np.isnan(v)], bins=10, range=rng)[0]
+        np.histogram(v[~np.isnan(v)], bins=num_bins, range=rng)[0]
         for v in velocities.transpose()
     ]
-    velocity_hist_per_frame = np.vstack(velocity_hist_per_frame).T
+    velocity_hist_per_frame = np.vstack(velocity_hist_per_frame)
 
     fig = plt.figure(figsize=(12, 8), dpi=600)
     ax = fig.add_subplot(111)
 
-    mesh = ax.pcolormesh(velocity_hist_per_frame, norm=plt.Normalize(vmin=0, vmax=10))
+    frame_array = np.array(list(range(num_frames)))
+    vel_array = np.linspace(*rng, num_bins)
+    frame_mesh, vel_mesh = np.meshgrid(frame_array, vel_array, indexing="ij")
+
+    mesh = ax.pcolormesh(
+        frame_mesh,
+        vel_mesh,
+        velocity_hist_per_frame,
+        norm=plt.Normalize(vmin=0, vmax=10),
+    )
 
     plt.colorbar(mappable=mesh, ax=ax)
+
+    for percentile, vel_per in zip(percentiles, velocity_percentiles):
+        vel_per[np.isnan(vel_per)] = 0
+        smoothed = sig.savgol_filter(vel_per, window_length=51, polyorder=3)
+        ax.plot(
+            frame_array, smoothed, color="white", linestyle=percentile_style[percentile]
+        )
+
+    ax.set_ylim(*rng)
 
     ax.set_xlabel("frame index")
     ax.set_ylabel("velocity bin")
