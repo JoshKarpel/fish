@@ -23,6 +23,12 @@ def remove_background(frames, threshold=0):
         std_over_frames = _streaming_std(frames)
         pixel_threshold += threshold * std_over_frames
 
+    # open_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (4, 4))
+    # close_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (7, 7))
+
+    # pixel_threshold = cv.morphologyEx(pixel_threshold, cv.MORPH_OPEN, open_kernel)
+    # pixel_threshold = cv.morphologyEx(pixel_threshold, cv.MORPH_CLOSE, close_kernel)
+
     for frame in frames:
         yield np.where(frame >= pixel_threshold, frame - avg_over_frames, 0).astype(
             np.uint8

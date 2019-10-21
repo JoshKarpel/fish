@@ -26,6 +26,7 @@ def make_frames(
     areas_out=None,
     velocities_out=None,
     velocity_histogram_out=None,
+    do_backsub=True,
 ):
     open_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (4, 4))
     close_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (7, 7))
@@ -34,7 +35,9 @@ def make_frames(
 
     for frame_idx, frame in enumerate(frames):
         # produce the "modified" frame that we actually perform tracking on
-        mod = backsub.apply(frame)
+        mod = frame.copy()
+        if do_backsub:
+            mod = backsub.apply(mod)
         mod = cv.morphologyEx(mod, cv.MORPH_OPEN, open_kernel)
         mod = cv.morphologyEx(mod, cv.MORPH_CLOSE, close_kernel)
 
@@ -44,7 +47,7 @@ def make_frames(
 
         if frame_idx > 10:
             tracker.update_tracks(contours, frame_idx)
-            tracker.clean(frame_idx)
+            tracker.check_for_locks(frame_idx)
 
         # produce the movie frame that we'll actually write out to disk
         img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
@@ -171,8 +174,10 @@ if __name__ == "__main__":
     OUT = Path(__file__).parent / "out" / Path(__file__).stem
     OUT.mkdir(exist_ok=True)
 
-    for movie, draw in itertools.product(["control", "drug"], [True]):
+    for movie, draw in itertools.product(["control", "drug"], [True, False]):
         frames = fish.load_or_read(IN / movie)[100:]
+
+        frames = list(fish.remove_background(frames))
 
         it = make_frames(
             frames,
@@ -183,6 +188,7 @@ if __name__ == "__main__":
             areas_out=OUT / f"{movie}_areas.png",
             velocities_out=OUT / f"{movie}_velocities.png",
             velocity_histogram_out=OUT / f"{movie}_velocity_histogram.png",
+            do_backsub=False,
         )
 
         op = fish.make_movie(
@@ -192,5 +198,5 @@ if __name__ == "__main__":
             fps=5,
         )
 
-        # for frame in tqdm(it, total=len(frames)):
-        #     pass
+    # for frame in tqdm(it, total=len(frames)):
+    #     pass

@@ -94,15 +94,9 @@ class ObjectTrack:
 
 
 class ObjectTracker:
-    def __init__(
-        self,
-        snap_to: int = 20,
-        lock_after: int = 10,
-        max_track_length: Optional[int] = None,
-    ):
+    def __init__(self, snap_to: int = 20, lock_after: int = 10):
         self.snap_to = snap_to
         self.lock_after = lock_after
-        self.max_track_length = max_track_length
 
         self.tracks = {}
         self._id_counter = itertools.count()
@@ -148,12 +142,7 @@ class ObjectTracker:
         track.update(frame_idx, contour)
         self.tracks[id] = track
 
-    def clean(self, frame_idx: int):
-        if self.max_track_length is not None:
-            self.tracks = {
-                oid: track[-self.max_track_length :]
-                for oid, track in self.tracks.items()
-            }
+    def check_for_locks(self, frame_idx: int):
         for oid, track in self.tracks.items():
             if track.last_updated_frame + self.lock_after < frame_idx:
                 track.is_locked = True
