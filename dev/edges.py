@@ -62,6 +62,9 @@ def make_frames(
     make_velocity_histogram_over_time(
         velocity_histogram_out, tracker, num_frames=frame_idx
     )
+    make_velocity_histogram_over_time_v2(
+        velocity_histogram_out, tracker, num_frames=frame_idx
+    )
 
 
 def make_velocity_histogram_over_time(out, tracker, num_frames):
@@ -122,6 +125,65 @@ def make_velocity_histogram_over_time(out, tracker, num_frames):
     ax.set_ylabel("velocity bin")
 
     plt.savefig(out)
+
+
+COLORS = [
+    "#1b9e77",
+    "#d95f02",
+    "#7570b3",
+    "#e7298a",
+    "#66a61e",
+    "#e6ab02",
+    "#a6761d",
+    "#666666",
+]
+
+
+def make_velocity_histogram_over_time_v2(out, tracker, num_frames):
+    padded_velocities = []
+    for oid, track in tracker.tracks.items():
+        idxs = np.array(track.frame_idxs)
+
+        if len(idxs) < 10:
+            # if len(idxs) < 10 or not np.all(areas > 50):
+            continue
+
+        velocities = np.linalg.norm(np.diff(np.vstack(track.positions), axis=0), axis=1)
+
+        padded = np.zeros(num_frames) * np.NaN
+        padded[idxs[:-1]] = velocities
+        padded_velocities.append(padded)
+
+    velocities = np.vstack(padded_velocities)
+    print(velocities.shape)
+    percentiles = [20, 40, 60, 80, 100]
+    velocity_percentiles = np.nanpercentile(velocities, percentiles)
+    # print(velocity_percentiles)
+    print(velocity_percentiles.shape)
+    rng = (0, np.nanmax(velocities))
+
+    print(velocity_percentiles)
+    bin_edges = [0] + list(velocity_percentiles)
+    print(bin_edges)
+
+    velocity_hist_per_frame = [
+        np.histogram(v[~np.isnan(v)], bins=bin_edges, range=rng)[0]
+        for v in velocities.transpose()
+    ]
+    velocity_hist_per_frame = np.vstack(velocity_hist_per_frame)
+    print(velocity_hist_per_frame.shape)
+
+    fig = plt.figure(figsize=(12, 8), dpi=600)
+    ax = fig.add_subplot(111)
+
+    frame_array = np.array(list(range(num_frames)))
+
+    ax.stackplot(frame_array, velocity_hist_per_frame.transpose(), colors=COLORS)
+
+    ax.set_xlabel("frame index")
+    ax.set_ylabel("# of detected objects")
+
+    plt.savefig(str(out).replace(".png", "_v2.png"))
 
 
 def make_velocities_over_time(out, tracker):
