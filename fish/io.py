@@ -55,21 +55,6 @@ def load(path: os.PathLike):
         return np.load(file)
 
 
-def load_or_read(path: os.PathLike):
-    path = Path(path)
-
-    try:
-        npy = path.with_suffix(".npy")
-        frames = load(npy)
-        logger.debug(f"Loaded frames from {npy}")
-    except FileNotFoundError:
-        avi = path.with_suffix(".avi")
-        frames = read(avi)
-        logger.debug(f"Loaded frames from {avi}")
-        save(path.with_suffix(".npy"), frames)
-    return frames
-
-
 def display(frames, wait: int = 0):
     cv.namedWindow("movie")
 
@@ -85,7 +70,6 @@ def display(frames, wait: int = 0):
 
 
 def make_movie(path, frames, num_frames: Optional[int] = None, fps=30):
-    path = Path(path).with_suffix(".mp4")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     tmp_path = path.with_suffix(".working" + path.suffix)
@@ -95,7 +79,7 @@ def make_movie(path, frames, num_frames: Optional[int] = None, fps=30):
         if writer is None:
             height, width = frame.shape[:2]
             color = len(frame.shape) == 3
-            fourcc = cv.VideoWriter_fourcc(*"mp4v")  # Be sure to use lower case
+            fourcc = cv.VideoWriter_fourcc(*"mp4v")  # make sure to use lower case
             writer = cv.VideoWriter(
                 str(tmp_path), fourcc, float(fps), (width, height), isColor=color
             )

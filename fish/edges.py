@@ -60,9 +60,7 @@ def distance_between(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def get_contours(edges: np.ndarray, area_cutoff: float = 10):
-    image, contours, hierarchy = cv.findContours(
-        edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE
-    )
+    contours, hierarchy = cv.findContours(edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
 
     contours = map(Contour, contours)
     contours = [c for c in contours if c.area > area_cutoff]
@@ -158,7 +156,7 @@ def draw_bounding_rectangles(
     contours = list(contours)
 
     boxes = [cv.boxPoints(c.bounding_rectangle).astype(np.int0) for c in contours]
-    cv.drawContours(frame, boxes, -1, color=GREEN, thickness=2, lineType=cv.LINE_AA)
+    cv.drawContours(frame, boxes, -1, color=GREEN, thickness=1, lineType=cv.LINE_AA)
 
     for c in contours:
         x, y = c.centroid_ints
@@ -208,7 +206,7 @@ def draw_live_object_tracks(frame: Frame, object_tracker: ObjectTracker):
         list(object_id_to_track.values()),
         isClosed=False,
         color=RED,
-        thickness=2,
+        thickness=1,
         lineType=cv.LINE_AA,
     )
 
@@ -218,7 +216,7 @@ def draw_live_object_tracks(frame: Frame, object_tracker: ObjectTracker):
             f"{oid}",
             (curve[-1, 0] + 15, curve[-1, 1] + 15),
             fontFace=cv.FONT_HERSHEY_DUPLEX,
-            fontScale=1,
+            fontScale=0.5,
             color=YELLOW,
             thickness=1,
             lineType=cv.LINE_AA,
