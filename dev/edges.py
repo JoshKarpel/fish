@@ -16,11 +16,11 @@ import fish
 
 logging.basicConfig()
 
-OPEN_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (4, 4))
-CLOSE_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (7, 7))
+OPEN_KERNEL = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
+CLOSE_KERNEL = cv.getStructuringElement(cv.MORPH_RECT, (5, 5))
 
 
-def make_frames(frames, edge_options=None, draw_on_original=True):
+def make_frames(frames, edge_options, draw_on_original=True):
     backsub = train_background(frames, iterations=5)
 
     tracker = fish.ObjectTracker()
@@ -34,7 +34,7 @@ def make_frames(frames, edge_options=None, draw_on_original=True):
 
         # find edges, and from edges, contours
         edges = fish.get_edges(mod, **edge_options)
-        contours = fish.get_contours(edges)
+        contours = fish.get_contours(edges, area_cutoff=30)
 
         tracker.update_tracks(contours, frame_idx)
         tracker.check_for_locks(frame_idx)
@@ -60,7 +60,7 @@ def train_background(frames, iterations=10, seed=1):
 
         for frame in tqdm(
             shuffled,
-            desc=f"Training background model (iteration {iteration})",
+            desc=f"Training background model (iteration {iteration + 1})",
             leave=False,
         ):
             backsub.apply(frame)
@@ -93,7 +93,7 @@ if __name__ == "__main__":
             edge_options={
                 "lower_threshold": lower,
                 "upper_threshold": upper,
-                "smoothing": smoothing,  # can be between 3 and 7 (inclusive)
+                "smoothing": smoothing,
             },
             draw_on_original=draw,
         )
@@ -103,5 +103,5 @@ if __name__ == "__main__":
             / f"{movie}__lower={lower}_upper={upper}_smoothing={smoothing}_draw_on_original={draw}.mp4",
             frames=output_frames,
             num_frames=len(input_frames),
-            fps=2,
+            fps=1,
         )

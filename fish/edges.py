@@ -55,17 +55,17 @@ def get_edges(
     )
 
 
-def distance_between(a: np.ndarray, b: np.ndarray) -> float:
-    return np.linalg.norm(a - b)
-
-
-def get_contours(edges: np.ndarray, area_cutoff: float = 10):
+def get_contours(edges: np.ndarray, area_cutoff: float):
     contours, hierarchy = cv.findContours(edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
 
     contours = map(Contour, contours)
     contours = [c for c in contours if c.area > area_cutoff]
 
     return contours
+
+
+def distance_between(a: np.ndarray, b: np.ndarray) -> float:
+    return np.linalg.norm(a - b)
 
 
 BLUE = (255, 0, 0)
@@ -78,13 +78,11 @@ YELLOW = (0, 255, 255)
 class ObjectTrack:
     frame_idxs: List[int] = dataclasses.field(default_factory=list)
     positions: List[np.array] = dataclasses.field(default_factory=list)
-    areas: List[float] = dataclasses.field(default_factory=list)
     is_locked: bool = False
 
     def update(self, frame_idx: int, contour):
         self.frame_idxs.append(frame_idx)
         self.positions.append(contour.centroid)
-        self.areas.append(contour.area)
 
     @property
     def last_updated_frame(self) -> int:
