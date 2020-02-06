@@ -3,6 +3,7 @@ import logging
 
 import dataclasses
 import itertools
+import collections
 
 import numpy as np
 import cv2 as cv
@@ -97,10 +98,14 @@ class ObjectTracker:
         self.tracks = {}
         self._id_counter = itertools.count()
 
+        self.raw = collections.defaultdict(list)
+
     def _next_id(self):
         return next(self._id_counter)
 
     def update_tracks(self, contours, frame_idx):
+        self.raw[frame_idx].extend(contours[:])
+
         # if we have no tracks yet, just make everything a track
         if len(self.tracks) == 0:
             for contour in contours:
@@ -193,9 +198,9 @@ def draw_bounding_rectangles(
     return frame
 
 
-def draw_live_object_tracks(frame: Frame, object_tracker: ObjectTracker):
+def draw_live_object_tracks(frame: Frame, object_tracker: ObjectTracker, history=100):
     object_id_to_track = {
-        oid: np.vstack(track.positions).astype(np.int0)
+        oid: np.vstack(track.positions).astype(np.int0)[-history:]
         for oid, track in object_tracker.tracks.items()
         if not track.is_locked
     }
