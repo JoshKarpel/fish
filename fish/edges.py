@@ -8,6 +8,8 @@ import collections
 import numpy as np
 import cv2 as cv
 
+from . import utils
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -57,7 +59,11 @@ def get_edges(
 
 
 def get_contours(edges: np.ndarray, area_cutoff: float):
-    contours, hierarchy = cv.findContours(edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
+    res = cv.findContours(edges, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
+    try:
+        contours, hierarchy = res
+    except ValueError:  # compat hack for opencv 3 (below) vs 4 (above)
+        _, contours, hierarchy = res
 
     contours = map(Contour, contours)
     contours = [c for c in contours if c.area > area_cutoff]
@@ -79,11 +85,17 @@ YELLOW = (0, 255, 255)
 class ObjectTrack:
     frame_idxs: List[int] = dataclasses.field(default_factory=list)
     positions: List[np.array] = dataclasses.field(default_factory=list)
+    contours: List[Contour] = dataclasses.field(default_factory=list)
     is_locked: bool = False
+
+    @property
+    def is_alive(self):
+        return not self.is_locked
 
     def update(self, frame_idx: int, contour):
         self.frame_idxs.append(frame_idx)
         self.positions.append(contour.centroid)
+        self.contours.append(contour)
 
     @property
     def last_updated_frame(self) -> int:
@@ -149,17 +161,42 @@ class ObjectTracker:
                 track.is_locked = True
 
 
+def total_dist(points):
+    return sum(distance_between(a, b) for a, b in utils.window(points, 2))
+
+
 def draw_bounding_rectangles(
     frame: Frame,
-    contours: Iterable[Contour],
+    tracker,
     mark_centroid: bool = False,
     display_area: bool = False,
     display_perimeter: bool = False,
+    mark_slow: bool = False,
 ):
-    contours = list(contours)
-
+    contours = [
+        track.contours[-1] for track in tracker.tracks.values() if track.is_alive
+    ]
     boxes = [cv.boxPoints(c.bounding_rectangle).astype(np.int0) for c in contours]
-    cv.drawContours(frame, boxes, -1, color=GREEN, thickness=1, lineType=cv.LINE_AA)
+
+    if mark_slow:
+        recent_track = [
+            [c.centroid for c in track.contours[-11:-1]]
+            for track in tracker.tracks.values()
+            if track.is_alive
+        ]
+        moving = [len(rt) > 1 and total_dist(rt) > 3 * len(rt) for rt in recent_track]
+
+        for box, is_moving in zip(boxes, moving):
+            cv.drawContours(
+                frame,
+                [box],
+                -1,
+                color=GREEN if is_moving else RED,
+                thickness=1,
+                lineType=cv.LINE_AA,
+            )
+    else:
+        cv.drawContours(frame, boxes, -1, color=GREEN, thickness=1, lineType=cv.LINE_AA)
 
     for c in contours:
         x, y = c.centroid_ints
@@ -198,9 +235,11 @@ def draw_bounding_rectangles(
     return frame
 
 
-def draw_live_object_tracks(frame: Frame, object_tracker: ObjectTracker, history=100):
+def draw_live_object_tracks(
+    frame: Frame, object_tracker: ObjectTracker, track_length=100, display_id=True
+):
     object_id_to_track = {
-        oid: np.vstack(track.positions).astype(np.int0)[-history:]
+        oid: np.vstack(track.positions).astype(np.int0)[-track_length:]
         for oid, track in object_tracker.tracks.items()
         if not track.is_locked
     }
@@ -208,21 +247,22 @@ def draw_live_object_tracks(frame: Frame, object_tracker: ObjectTracker, history
         frame,
         list(object_id_to_track.values()),
         isClosed=False,
-        color=RED,
+        color=YELLOW,
         thickness=1,
         lineType=cv.LINE_AA,
     )
 
-    for oid, curve in object_id_to_track.items():
-        cv.putText(
-            frame,
-            f"{oid}",
-            (curve[-1, 0] + 15, curve[-1, 1] + 15),
-            fontFace=cv.FONT_HERSHEY_DUPLEX,
-            fontScale=0.5,
-            color=YELLOW,
-            thickness=1,
-            lineType=cv.LINE_AA,
-        )
+    if display_id:
+        for oid, curve in object_id_to_track.items():
+            cv.putText(
+                frame,
+                f"{oid}",
+                (curve[-1, 0] + 15, curve[-1, 1] + 15),
+                fontFace=cv.FONT_HERSHEY_DUPLEX,
+                fontScale=0.5,
+                color=YELLOW,
+                thickness=1,
+                lineType=cv.LINE_AA,
+            )
 
     return frame

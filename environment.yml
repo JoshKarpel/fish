@@ -14,3 +14,5 @@ dependencies:
   - jupyterlab
   - bokeh
   - tqdm
+  - matplotlib
+  - networkx

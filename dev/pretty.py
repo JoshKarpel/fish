@@ -10,7 +10,6 @@ import scipy.signal as sig
 import cv2 as cv
 
 import matplotlib.pyplot as plt
-
 from tqdm import tqdm, trange
 
 import fish
@@ -29,7 +28,7 @@ KERNEL_5 = diamond(5)
 
 
 def make_frames(frames, tracker, edge_options, draw_on_original=True, draw_tracks=True):
-    backsub = train_background_subtractor(frames, iterations=5)
+    backsub = train_background_subtractor(frames, iterations=1)
 
     for frame_idx, frame in enumerate(frames):
         # produce the "modified" frame that we actually perform tracking on
@@ -47,9 +46,12 @@ def make_frames(frames, tracker, edge_options, draw_on_original=True, draw_track
 
         # produce the movie frame that we'll actually write out to disk
         img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
-        img = fish.draw_bounding_rectangles(img, contours)
+
+        img = fish.draw_bounding_rectangles(img, tracker, mark_slow=True)
         if draw_tracks:
-            img = fish.draw_live_object_tracks(img, tracker, track_length=100)
+            img = fish.draw_live_object_tracks(
+                img, tracker, track_length=30, display_id=False
+            )
         yield img
 
 
@@ -62,13 +64,12 @@ def train_background_subtractor(frames, iterations=10, seed=1):
 
     shuffled = frames.copy()
 
-    for iteration in trange(iterations, desc="Training background model"):
+    for iteration in range(iterations):
         rnd.shuffle(shuffled)
 
         for frame in tqdm(
             shuffled,
-            desc=f"Training background model (iteration {iteration + 1})",
-            leave=False,
+            desc=f"Training background model (iteration {iteration + 1}/{iterations})",
         ):
             backsub.apply(frame)
 
@@ -85,59 +86,33 @@ if __name__ == "__main__":
     OUT = HERE / "out" / Path(__file__).stem
 
     movies = [f"D1-{n}" for n in range(1, 13)]
+    # movies = ["D1-1"]
     lowers = [25]
     uppers = [200]
     smoothings = [3]
 
-    originals = [False]
-    tracks = [False]
-
     for movie, lower, upper, smoothing in itertools.product(
         movies, lowers, uppers, smoothings
     ):
-        for original, track in itertools.product(originals, tracks):
-            input_frames = fish.read((DATA / f"{movie}.mp4"))[100:]
+        input_frames = fish.read((DATA / f"{movie}.hsv"))[100:, 90:-110, 260:-190]
 
-            tracker = fish.ObjectTracker()
+        tracker = fish.ObjectTracker(lock_after=0)
 
-            output_frames = make_frames(
-                input_frames,
-                tracker,
-                edge_options={
-                    "lower_threshold": lower,
-                    "upper_threshold": upper,
-                    "smoothing": smoothing,
-                },
-                draw_on_original=original,
-                draw_tracks=track,
-            )
+        output_frames = make_frames(
+            input_frames,
+            tracker,
+            edge_options={
+                "lower_threshold": lower,
+                "upper_threshold": upper,
+                "smoothing": smoothing,
+            },
+            draw_on_original=True,
+            draw_tracks=True,
+        )
 
-            for frame in tqdm(output_frames, desc="Processing movie..."):
-                pass
-
-            # op = fish.make_movie(
-            #     OUT
-            #     / f"{movie}__lower={lower}_upper={upper}_smoothing={smoothing}__original={original}_tracks={track}.mp4",
-            #     frames=output_frames,
-            #     num_frames=len(input_frames),
-            #     fps=1,
-            # )
-
-            with (
-                OUT
-                / f"{movie}__lower={lower}_upper={upper}_smoothing={smoothing}__centroids.csv"
-            ).open(mode="w", newline="") as f:
-                writer = csv.DictWriter(f, ["frame", "x", "y", "area", "perimeter"])
-
-                for frame_index, contours in tracker.raw.items():
-                    for contour in contours:
-                        x, y = contour.centroid
-                        writer.writerow(
-                            {
-                                "frame": frame_index,
-                                "x": x,
-                                "y": y,
-                                "area": contour.area,
-                                "perimeter": contour.perimeter,
-                            }
-                        )
+        op = fish.make_movie(
+            OUT / f"{movie}__pretty.mp4",
+            frames=output_frames,
+            num_frames=len(input_frames),
+            fps=10,
+        )
