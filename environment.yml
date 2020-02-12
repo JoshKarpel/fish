@@ -2,17 +2,20 @@ name: fish
 channels:
   - defaults
 dependencies:
-  - scikit-learn
-  - opencv
-  - python
-  - black
-  - ipython
-  - pip
-  - memory_profiler
   - scikit-image
+  - python
+  - pip
   - line_profiler
-  - jupyterlab
-  - bokeh
   - tqdm
-  - matplotlib
+  - ipython
   - networkx
+  - bokeh
+  - opencv
+  - scikit-learn
+  - black
+  - jupyterlab
+  - matplotlib
+  - memory_profiler
+  - ipywidgets
+prefix: /home/jkarpel/.python/envs/fish
+

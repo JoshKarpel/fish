@@ -28,7 +28,14 @@ KERNEL_3 = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
 KERNEL_5 = diamond(5)
 
 
-def make_frames(frames, tracker, edge_options, draw_on_original=True, draw_tracks=True):
+def make_frames(
+    frames,
+    tracker,
+    edge_options,
+    draw_on_original=True,
+    draw_bounding_rectangles=True,
+    draw_tracks=True,
+):
     backsub = train_background_subtractor(frames, iterations=5)
 
     for frame_idx, frame in enumerate(frames):
@@ -47,7 +54,8 @@ def make_frames(frames, tracker, edge_options, draw_on_original=True, draw_track
 
         # produce the movie frame that we'll actually write out to disk
         img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
-        img = fish.draw_bounding_rectangles(img, contours)
+        if draw_bounding_rectangles:
+            img = fish.draw_bounding_rectangles(img, contours)
         if draw_tracks:
             img = fish.draw_live_object_tracks(img, tracker, track_length=100)
         yield img
@@ -90,13 +98,14 @@ if __name__ == "__main__":
     smoothings = [3]
 
     originals = [False]
+    rectangles = [False]
     tracks = [False]
 
     for movie, lower, upper, smoothing in itertools.product(
         movies, lowers, uppers, smoothings
     ):
-        for original, track in itertools.product(originals, tracks):
-            input_frames = fish.read((DATA / f"{movie}.mp4"))[100:]
+        for original, rects, track in itertools.product(originals, rectangles, tracks):
+            input_frames = fish.read((DATA / f"{movie}.hsv"))[100:]
 
             tracker = fish.ObjectTracker()
 
@@ -109,6 +118,7 @@ if __name__ == "__main__":
                     "smoothing": smoothing,
                 },
                 draw_on_original=original,
+                draw_bounding_rectangles=rects,
                 draw_tracks=track,
             )
 
@@ -123,10 +133,12 @@ if __name__ == "__main__":
             #     fps=1,
             # )
 
-            with (
+            out = (
                 OUT
                 / f"{movie}__lower={lower}_upper={upper}_smoothing={smoothing}__centroids.csv"
-            ).open(mode="w", newline="") as f:
+            )
+            out.parent.mkdir(parents=True, exist_ok=True)
+            with out.open(mode="w", newline="") as f:
                 writer = csv.DictWriter(f, ["frame", "x", "y", "area", "perimeter"])
 
                 for frame_index, contours in tracker.raw.items():
