@@ -28,14 +28,7 @@ KERNEL_3 = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
 KERNEL_5 = diamond(5)
 
 
-def make_frames(
-    frames,
-    tracker,
-    edge_options,
-    draw_on_original=True,
-    draw_bounding_rectangles=True,
-    draw_tracks=True,
-):
+def find_points(frames, tracker, edge_options):
     backsub = train_background_subtractor(frames, iterations=5)
 
     for frame_idx, frame in enumerate(frames):
@@ -52,13 +45,7 @@ def make_frames(
         tracker.update_tracks(contours, frame_idx)
         tracker.check_for_locks(frame_idx)
 
-        # produce the movie frame that we'll actually write out to disk
-        img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
-        if draw_bounding_rectangles:
-            img = fish.draw_bounding_rectangles(img, tracker)
-        if draw_tracks:
-            img = fish.draw_live_object_tracks(img, tracker, track_length=100)
-        yield img
+    return tracker
 
 
 def train_background_subtractor(frames, iterations=10, seed=1):
@@ -87,6 +74,25 @@ def apply_background_subtraction(background_model, frame):
     return background_model.apply(frame, learningRate=0)
 
 
+def write_points(tracker, out):
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open(mode="w", newline="") as f:
+        writer = csv.DictWriter(f, ["frame", "x", "y", "area", "perimeter"])
+
+        for frame_index, contours in tracker.raw.items():
+            for contour in contours:
+                x, y = contour.centroid
+                writer.writerow(
+                    {
+                        "frame": frame_index,
+                        "x": x,
+                        "y": y,
+                        "area": contour.area,
+                        "perimeter": contour.perimeter,
+                    }
+                )
+
+
 if __name__ == "__main__":
     HERE = Path(__file__).absolute().parent
     DATA = HERE.parent / "data"
@@ -109,7 +115,7 @@ if __name__ == "__main__":
 
             tracker = fish.ObjectTracker()
 
-            output_frames = make_frames(
+            tracker = find_points(
                 input_frames,
                 tracker,
                 edge_options={
@@ -117,13 +123,15 @@ if __name__ == "__main__":
                     "upper_threshold": upper,
                     "smoothing": smoothing,
                 },
-                draw_on_original=original,
-                draw_bounding_rectangles=rects,
-                draw_tracks=track,
             )
 
-            for frame in tqdm(output_frames, desc="Processing movie..."):
-                pass
+            write_points(
+                tracker,
+                (
+                    OUT
+                    / f"{movie}__lower={lower}_upper={upper}_smoothing={smoothing}__centroids.csv"
+                ),
+            )
 
             # op = fish.make_movie(
             #     OUT
@@ -132,24 +140,3 @@ if __name__ == "__main__":
             #     num_frames=len(input_frames),
             #     fps=1,
             # )
-
-            out = (
-                OUT
-                / f"{movie}__lower={lower}_upper={upper}_smoothing={smoothing}__centroids.csv"
-            )
-            out.parent.mkdir(parents=True, exist_ok=True)
-            with out.open(mode="w", newline="") as f:
-                writer = csv.DictWriter(f, ["frame", "x", "y", "area", "perimeter"])
-
-                for frame_index, contours in tracker.raw.items():
-                    for contour in contours:
-                        x, y = contour.centroid
-                        writer.writerow(
-                            {
-                                "frame": frame_index,
-                                "x": x,
-                                "y": y,
-                                "area": contour.area,
-                                "perimeter": contour.perimeter,
-                            }
-                        )
