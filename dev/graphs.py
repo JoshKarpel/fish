@@ -170,8 +170,12 @@ class Path:
     def coordinates(self):
         return np.array([[point.x, point.y] for point in self.points])
 
+    @property
+    def pairs(self):
+        yield from window(self.points, 2)
+
     def cost(self, graph):
-        return sum(graph[a][b]["weight"] for a, b in window(self.points, 2))
+        return sum(graph[a][b]["weight"] for a, b in self.pairs)
 
     def __str__(self):
         return f'Path({"->".join(str(p.index) for p in points)})'
@@ -224,6 +228,10 @@ def find_paths_basic(graph, starts, ends):
 
 
 def find_paths_increasing_weights(graph, starts, ends):
+    graph = deepcopy(graph)
+    starts = starts.copy()
+    ends = ends.copy()
+
     possible_paths = shortest_paths_between(graph, starts, ends)
 
     paths = {}
@@ -232,11 +240,13 @@ def find_paths_increasing_weights(graph, starts, ends):
             possible_paths.items(), key=lambda kv: kv[1].cost(graph)
         )
         paths[start, end] = path
-        possible_paths = {
-            (s, e): p
-            for (s, e), p in possible_paths.items()
-            if s is not start and e is not end
-        }
+        starts.remove(start)
+        ends.remove(end)
+
+        for a, b in path.pairs:
+            graph[a][b]["weight"] += 10
+
+        possible_paths = shortest_paths_between(graph, starts, ends)
 
     return paths
 
@@ -248,7 +258,7 @@ def make_movie(out, frames, paths):
     )
 
 
-def make_span_plot(points_by_frame, paths):
+def make_span_plot(out, points_by_frame, paths):
     num_points = []
     used_points = []
     for frame_index, points in points_by_frame.items():
@@ -287,10 +297,12 @@ def make_span_plot(points_by_frame, paths):
     fig.legend(loc="upper left")
 
     fig.tight_layout()
-    plt.savefig(str(OUT_DIR / "span.png"))
+    plt.savefig(str(out))
 
 
 if __name__ == "__main__":
+    prefix = "plus_10"
+
     points = load_points(
         THIS_DIR
         / "out"
@@ -311,9 +323,9 @@ if __name__ == "__main__":
     starts = points_by_frame[0]
     ends = points_by_frame[last_frame_index]
 
-    paths = find_paths_basic(g, starts, ends)
+    paths = find_paths_increasing_weights(g, starts, ends)
 
-    make_span_plot(points_by_frame, paths)
+    make_span_plot(OUT_DIR / f"{prefix}__span.png", points_by_frame, paths)
 
     frames = fish.read(DATA_DIR / "D1-1.hsv")[100:]
-    make_movie(OUT_DIR / "test.mp4", frames, paths)
+    make_movie(OUT_DIR / f"{prefix}__test.mp4", frames, paths)
