@@ -15,6 +15,8 @@ from scipy import ndimage as ndi
 import networkx as nx
 from dataclasses import dataclass
 
+import matplotlib.pyplot as plt
+
 import skimage
 import skimage.feature
 import skimage.filters
@@ -221,11 +223,71 @@ def find_paths_basic(graph, starts, ends):
     return paths
 
 
+def find_paths_increasing_weights(graph, starts, ends):
+    possible_paths = shortest_paths_between(graph, starts, ends)
+
+    paths = {}
+    while len(possible_paths) > 0:
+        (start, end), path = min(
+            possible_paths.items(), key=lambda kv: kv[1].cost(graph)
+        )
+        paths[start, end] = path
+        possible_paths = {
+            (s, e): p
+            for (s, e), p in possible_paths.items()
+            if s is not start and e is not end
+        }
+
+    return paths
+
+
 def make_movie(out, frames, paths):
     f = frames.copy()
     fish.make_movie(
         out, frames=original_with_paths(f, paths.values()), num_frames=len(f), fps=5
     )
+
+
+def make_span_plot(points_by_frame, paths):
+    num_points = []
+    used_points = []
+    for frame_index, points in points_by_frame.items():
+        num_points.append(len(points))
+        used_points.append(
+            len(set(path.points[frame_index] for path in paths.values()))
+        )
+
+    num_points = np.array(num_points, dtype=np.float64)
+    used_points = np.array(used_points, dtype=np.float64)
+
+    span_percent = 100 * used_points / num_points
+
+    fig, ax_raw = plt.subplots()
+
+    ax_raw.plot(num_points, color="blue", linestyle="--", label="# total points")
+    ax_raw.plot(used_points, color="blue", label="# used points")
+
+    ax_raw.set_xlim(0, len(num_points))
+    ax_raw.set_ylim(0, np.max(num_points))
+
+    ax_raw.set_xlabel("frame #")
+    ax_raw.set_ylabel("#", color="blue")
+    ax_raw.tick_params(axis="y", labelcolor="blue")
+
+    ax_frac = ax_raw.twinx()
+    ax_frac.plot(span_percent, color="red", label="% used points")
+
+    ax_frac.set_ylim(0, 100)
+
+    ax_frac.set_ylabel("%", color="red")
+    ax_frac.tick_params(axis="y", labelcolor="red")
+
+    ax_frac.grid()
+
+    fig.legend(loc="upper left")
+
+    fig.tight_layout()
+    plt.savefig(str(OUT_DIR / "span.png"))
 
 
 if __name__ == "__main__":
@@ -250,6 +312,8 @@ if __name__ == "__main__":
     ends = points_by_frame[last_frame_index]
 
     paths = find_paths_basic(g, starts, ends)
+
+    make_span_plot(points_by_frame, paths)
 
     frames = fish.read(DATA_DIR / "D1-1.hsv")[100:]
     make_movie(OUT_DIR / "test.mp4", frames, paths)
