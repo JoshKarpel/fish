@@ -135,7 +135,7 @@ def run_object_detector(movie, lower, upper, smoothing):
 
 
 if __name__ == "__main__":
-    tag = input("Map tag?")
+    tag = input("Map tag? ")
 
     if len(tag) < 1 or tag in htmap.get_tags():
         raise ValueError(f"tag {tag} is already in use")
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     uppers = eval(input("Edge detector upper thresholds? "))
     smoothings = eval(input("Edge detector smoothings? "))
 
-    htmap.settings["DOCKER.IMAGE"] = input("Docker Image?")
+    htmap.settings["DOCKER.IMAGE"] = input("Docker Image? ")
     mo = htmap.MapOptions(
         request_memory="1GB",
         request_disk="2GB",
