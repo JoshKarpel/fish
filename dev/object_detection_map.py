@@ -4,6 +4,7 @@ from pathlib import Path
 import itertools
 import csv
 import getpass
+import shutil
 
 import numpy as np
 import cv2 as cv
@@ -103,7 +104,14 @@ def object_rows(tracker):
 
 
 def run_object_detector(movie, lower, upper, smoothing):
-    input_frames = fish.read((staging_path / f"{movie}.hsv"))[100:]
+    staged_path = staging_path / f"{movie}.hsv"
+    local_path = Path(f"{movie}.hsv")
+
+    print(f"Copying from {staged_path} -> {local_path}")
+    shutil.copy2(staged_path, local_path)
+    print(f"Copy succeeded!")
+
+    input_frames = fish.read(local_path)[100:]
 
     tracker = fish.ObjectTracker()
 
@@ -142,7 +150,11 @@ if __name__ == "__main__":
     smoothings = eval(input("Edge detector smoothings? "))
 
     htmap.settings["DOCKER.IMAGE"] = input("Docker Image?")
-    mo = htmap.MapOptions(requirements="(Target.HasCHTCStaging == true)",)
+    mo = htmap.MapOptions(
+        request_memory="1GB",
+        request_disk="2GB",
+        requirements="(Target.HasCHTCStaging == true)",
+    )
 
     with htmap.build_map(run_object_detector, map_options=mo, tag=tag) as builder:
         for movie, lower, upper, smoothing in itertools.product(
