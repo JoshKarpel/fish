@@ -1,8 +1,8 @@
-FROM htcondor/htmap-exec:v0.4.3
+FROM htcondor/htmap-exec:v0.5.0
 
 USER root
 
-RUN conda install -y opencv scikit-learn scikit-image \
+RUN conda install -y opencv scikit-learn scikit-image networkx \
  && conda clean -y --all
 
 ARG CACHEBUST=1

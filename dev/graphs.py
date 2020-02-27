@@ -5,6 +5,8 @@ import collections
 import itertools
 from copy import deepcopy
 from multiprocessing import Pool
+from dataclasses import dataclass
+import os
 
 from tqdm import tqdm, trange
 
@@ -13,7 +15,6 @@ import numpy as np
 from scipy import ndimage as ndi
 
 import networkx as nx
-from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 
@@ -27,11 +28,6 @@ import skimage.measure
 import cv2 as cv
 
 import fish
-
-THIS_DIR = Path.cwd()
-ROOT_DIR = THIS_DIR.parent
-DATA_DIR = ROOT_DIR / "data"
-OUT_DIR = THIS_DIR / "out" / Path(__file__).stem
 
 
 @dataclass(frozen=True)
@@ -60,28 +56,6 @@ def load_points(path):
     return points
 
 
-def make_point_array(points):
-    arr = []
-    for point in points:
-        arr.append([point.frame, point.x, point.y])
-    return np.array(arr)
-
-
-def find_mean_point(point_array):
-    center = np.mean(point_array, axis=0)[1:]
-    center_point = Point(-1, -1, x=center[0], y=center[1], area=-1, perimeter=-1)
-
-    return center_point
-
-
-def distances_from_center(point_array, center):
-    return np.linalg.norm(point_array[:, 1:] - center, axis=-1)
-
-
-def filter_points_by_distance(points, center_point, cutoff):
-    return [p for p in points if p.distance_to(center_point) < cutoff]
-
-
 def window(seq, n):
     it = iter(seq)
     result = tuple(itertools.islice(it, n))
@@ -105,7 +79,11 @@ def make_graph_from_points(points_by_frame, max_distance):
     g = nx.DiGraph()
 
     for (curr_index, curr_points), (next_index, next_points) in window(
-        tqdm(list(sorted(points_by_frame.items(), key=lambda x: x[0]))), 2
+        tqdm(
+            list(sorted(points_by_frame.items(), key=lambda x: x[0])),
+            desc="Making graph from objects",
+        ),
+        2,
     ):
         edges = (
             (a, b, a.distance_to(b))
@@ -163,7 +141,7 @@ def original_with_paths(frames, paths):
 
 
 @dataclass(frozen=True)
-class Path:
+class ObjectPath:
     points: list
 
     @property
@@ -178,7 +156,7 @@ class Path:
         return sum(graph[a][b]["weight"] for a, b in self.pairs)
 
     def __str__(self):
-        return f'Path({"->".join(str(p.index) for p in points)})'
+        return f'Path({"->".join(str(p.index) for p in self.points)})'
 
 
 def find_shortest_paths(g, start):
@@ -193,7 +171,7 @@ def shortest_paths_between(g, starts, ends):
     shortest_paths = {}
 
     results = []
-    for start in tqdm(starts):
+    for start in tqdm(starts, desc="Finding shortest paths"):
         rv = find_shortest_paths(g, start)
         if rv is None:
             continue
@@ -204,7 +182,7 @@ def shortest_paths_between(g, starts, ends):
         for end, path in paths.items():
             if end not in ends_set:
                 continue
-            shortest_paths[start, end] = Path(path)
+            shortest_paths[start, end] = ObjectPath(path)
 
     return shortest_paths
 
@@ -258,7 +236,7 @@ def make_movie(out, frames, paths):
     )
 
 
-def make_span_plot(out, points_by_frame, paths):
+def make_span_plot(out, points_by_frame, paths, reported=None):
     num_points = []
     used_points = []
     for frame_index, points in points_by_frame.items():
@@ -278,11 +256,16 @@ def make_span_plot(out, points_by_frame, paths):
     ax_raw.plot(used_points, color="blue", label="# used points")
 
     ax_raw.set_xlim(0, len(num_points))
-    ax_raw.set_ylim(0, np.max(num_points))
+    ax_raw.set_ylim(0, int(max(np.max(num_points), reported or 0) * 1.1))
 
     ax_raw.set_xlabel("frame #")
     ax_raw.set_ylabel("#", color="blue")
     ax_raw.tick_params(axis="y", labelcolor="blue")
+
+    if reported is not None:
+        ax_raw.axhline(
+            y=reported, color="black", linestyle=":",
+        )
 
     ax_frac = ax_raw.twinx()
     ax_frac.plot(span_percent, color="red", label="% used points")
@@ -294,38 +277,67 @@ def make_span_plot(out, points_by_frame, paths):
 
     ax_frac.grid()
 
-    fig.legend(loc="upper left")
+    fig.legend(loc="lower left")
 
     fig.tight_layout()
     plt.savefig(str(out))
 
 
 if __name__ == "__main__":
+    THIS_DIR = Path(__file__).absolute().parent
+    ROOT_DIR = THIS_DIR.parent
+    DATA_DIR = ROOT_DIR / "data"
+    OUT_DIR = THIS_DIR / "out" / Path(__file__).stem
+
     prefix = "plus_10"
 
-    points = load_points(
-        THIS_DIR
-        / "out"
-        / "edges"
-        / "D1-1__lower=25_upper=200_smoothing=3__centroids.csv"
-    )
+    movies = [f"D1-{n}" for n in range(1, 13)] + [f"C1-{n}" for n in range(1, 4)]
+    reported_counts = [
+        34,
+        37,
+        38,
+        26,
+        21,
+        24,
+        39,
+        34,
+        22,
+        36,
+        34,
+        42,
+        52,
+        52,
+        60,
+    ]
 
-    point_array = make_point_array(points)
+    def do(movie, reported_count):
+        points = load_points(THIS_DIR / "out" / "paths" / f"{movie}__objects.csv")
 
-    mean_point = find_mean_point(point_array)
+        points_by_frame = group_points_by_frame(points)
+        g = make_graph_from_points(points_by_frame, max_distance=50)
 
-    points = filter_points_by_distance(points, center_point=mean_point, cutoff=430)
+        # the largest connected component of the graph should be the main dish
+        # because the graph is directed, we want "weak connection", which is equivalent to normal connection for undirected graphs
+        g = max((g.subgraph(c) for c in nx.weakly_connected_components(g)), key=len)
 
-    points_by_frame = group_points_by_frame(points)
-    g = make_graph_from_points(points_by_frame, max_distance=50)
+        last_frame_index = max(points_by_frame.keys())
+        starts = points_by_frame[0]
+        ends = points_by_frame[last_frame_index]
 
-    last_frame_index = max(points_by_frame.keys())
-    starts = points_by_frame[0]
-    ends = points_by_frame[last_frame_index]
+        paths = find_paths_increasing_weights(g, starts, ends)
 
-    paths = find_paths_increasing_weights(g, starts, ends)
+        make_span_plot(
+            OUT_DIR / f"{prefix}__{movie}__span.png",
+            points_by_frame,
+            paths,
+            reported=reported_count,
+        )
 
-    make_span_plot(OUT_DIR / f"{prefix}__span.png", points_by_frame, paths)
+        frames = fish.read(DATA_DIR / f"{movie}.hsv")[100:]
+        make_movie(OUT_DIR / f"{prefix}__{movie}__test.mp4", frames, paths)
 
-    frames = fish.read(DATA_DIR / "D1-1.hsv")[100:]
-    make_movie(OUT_DIR / f"{prefix}__test.mp4", frames, paths)
+    for movie, reported_count in zip(movies, reported_counts):
+        do(movie, reported_count)
+
+    # with Pool(processes=min(os.cpu_count() - 1, 4)) as p:
+    #     p.starmap(do, zip(movies, reported_counts))

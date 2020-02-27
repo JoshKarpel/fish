@@ -98,7 +98,7 @@ if __name__ == "__main__":
     DATA = HERE.parent / "data"
     OUT = HERE / "out" / Path(__file__).stem
 
-    movies = [f"D1-{n}" for n in range(1, 13)]
+    movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
     lowers = [25]
     uppers = [200]
     smoothings = [3]
@@ -126,11 +126,7 @@ if __name__ == "__main__":
             )
 
             write_points(
-                tracker,
-                (
-                    OUT
-                    / f"{movie}__lower={lower}_upper={upper}_smoothing={smoothing}__centroids.csv"
-                ),
+                tracker, (OUT / f"{movie}__objects.csv"),
             )
 
             # op = fish.make_movie(
