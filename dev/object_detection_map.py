@@ -104,12 +104,7 @@ def object_rows(tracker):
 
 
 def run_object_detector(movie, lower, upper, smoothing):
-    staged_path = staging_path / f"{movie}.hsv"
     local_path = Path(f"{movie}.hsv")
-
-    print(f"Copying from {staged_path} -> {local_path}")
-    shutil.copy2(staged_path, local_path)
-    print(f"Copy succeeded!")
 
     input_frames = fish.read(local_path)[100:]
 
