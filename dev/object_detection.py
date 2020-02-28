@@ -28,10 +28,11 @@ KERNEL_3 = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
 KERNEL_5 = diamond(5)
 
 
-def find_points(frames, tracker, edge_options):
+def find_points(frames, edge_options):
     backsub = train_background_subtractor(frames, iterations=5)
 
-    for frame_idx, frame in enumerate(frames):
+    objects_by_frame = {}
+    for frame_idx, frame in enumerate(tqdm(frames, desc="Detecting objects")):
         # produce the "modified" frame that we actually perform tracking on
         mod = apply_background_subtraction(backsub, frame)
 
@@ -42,10 +43,9 @@ def find_points(frames, tracker, edge_options):
         edges = fish.get_edges(mod, **edge_options)
         contours = fish.get_contours(edges, area_cutoff=30)
 
-        tracker.update_tracks(contours, frame_idx)
-        tracker.check_for_locks(frame_idx)
+        objects_by_frame[frame_idx] = contours
 
-    return tracker
+    return objects_by_frame
 
 
 def train_background_subtractor(frames, iterations=10, seed=1):
@@ -74,12 +74,12 @@ def apply_background_subtraction(background_model, frame):
     return background_model.apply(frame, learningRate=0)
 
 
-def write_points(tracker, out):
+def write_points(objects_by_frame, out):
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open(mode="w", newline="") as f:
         writer = csv.DictWriter(f, ["frame", "x", "y", "area", "perimeter"])
 
-        for frame_index, contours in tracker.raw.items():
+        for frame_index, contours in objects_by_frame.items():
             for contour in contours:
                 x, y = contour.centroid
                 writer.writerow(
@@ -98,41 +98,24 @@ if __name__ == "__main__":
     DATA = HERE.parent / "data"
     OUT = HERE / "out" / Path(__file__).stem
 
-    movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
+    # movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
+    movies = [f"D1-1"]
     lowers = [25]
     uppers = [200]
     smoothings = [3]
 
-    originals = [False]
-    rectangles = [False]
-    tracks = [False]
-
     for movie, lower, upper, smoothing in itertools.product(
         movies, lowers, uppers, smoothings
     ):
-        for original, rects, track in itertools.product(originals, rectangles, tracks):
-            input_frames = fish.read((DATA / f"{movie}.hsv"))[100:]
+        input_frames = fish.read((DATA / f"{movie}.hsv"))[100:]
 
-            tracker = fish.ObjectTracker()
+        objects = find_points(
+            input_frames,
+            edge_options={
+                "lower_threshold": lower,
+                "upper_threshold": upper,
+                "smoothing": smoothing,
+            },
+        )
 
-            tracker = find_points(
-                input_frames,
-                tracker,
-                edge_options={
-                    "lower_threshold": lower,
-                    "upper_threshold": upper,
-                    "smoothing": smoothing,
-                },
-            )
-
-            write_points(
-                tracker, (OUT / f"{movie}__objects.csv"),
-            )
-
-            # op = fish.make_movie(
-            #     OUT
-            #     / f"{movie}__lower={lower}_upper={upper}_smoothing={smoothing}__original={original}_tracks={track}.mp4",
-            #     frames=output_frames,
-            #     num_frames=len(input_frames),
-            #     fps=1,
-            # )
+        write_points(objects, (OUT / f"{movie}__objects.csv"))

@@ -274,9 +274,7 @@ def make_span_plot(out, points_by_frame, paths, reported=None):
     ax_frac.grid()
 
     if reported is not None:
-        ax_raw.axhline(
-            y=reported, color="black", linestyle=":", linewidth=2,
-        )
+        ax_raw.axhline(y=reported, color="black", linestyle=":", linewidth=2)
 
     fig.legend(loc="lower left")
 
@@ -295,23 +293,7 @@ if __name__ == "__main__":
 
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
     # movies = [f"D1-1"]
-    reported_counts = [
-        34,
-        37,
-        38,
-        26,
-        21,
-        24,
-        39,
-        34,
-        22,
-        36,
-        34,
-        42,
-        52,
-        52,
-        60,
-    ]
+    reported_counts = [34, 37, 38, 26, 21, 24, 39, 34, 22, 36, 34, 42, 52, 52, 60]
 
     def do(movie, reported_count):
         points = load_objects(THIS_DIR / "out" / "paths" / f"{movie}__objects.csv")

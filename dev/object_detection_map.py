@@ -20,15 +20,13 @@ def diamond(n):
     return ((b[:, None] + b) >= (n - 1) // 2).astype(np.uint8)
 
 
-KERNEL_3 = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
-KERNEL_5 = diamond(5)
+def find_objects(frames, edge_options):
+    backsub = train_background_subtractor(frames, iterations=5)
 
+    KERNEL_3 = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
+    KERNEL_5 = diamond(5)
 
-def find_objects(frames, tracker, edge_options, background_subtractor_iterations=5):
-    backsub = train_background_subtractor(
-        frames, iterations=background_subtractor_iterations
-    )
-
+    objects_by_frame = {}
     for frame_idx, frame in enumerate(frames):
         # produce the "modified" frame that we actually perform tracking on
         mod = apply_background_subtraction(backsub, frame)
@@ -40,10 +38,9 @@ def find_objects(frames, tracker, edge_options, background_subtractor_iterations
         edges = fish.get_edges(mod, **edge_options)
         contours = fish.get_contours(edges, area_cutoff=30)
 
-        tracker.update_tracks(contours, frame_idx)
-        tracker.check_for_locks(frame_idx)
+        objects_by_frame[frame_idx] = contours
 
-    return tracker
+    return objects_by_frame
 
 
 def train_background_subtractor(frames, iterations=10, seed=1):
@@ -68,28 +65,8 @@ def apply_background_subtraction(background_model, frame):
     return background_model.apply(frame, learningRate=0)
 
 
-def write_points(tracker, out):
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open(mode="w", newline="") as f:
-        writer = csv.DictWriter(f, ["frame", "x", "y", "area", "perimeter"])
-
-        for frame_index, contours in tracker.raw.items():
-            for contour in contours:
-                x, y = contour.centroid
-                writer.writerow(
-                    {
-                        "frame": frame_index,
-                        "x": x,
-                        "y": y,
-                        "area": contour.area,
-                        "perimeter": contour.perimeter,
-                    }
-                )
-    return out
-
-
-def object_rows(tracker):
-    for frame_index, contours in tracker.raw.items():
+def object_rows(objects_by_frame):
+    for frame_index, contours in objects_by_frame.items():
         for contour in contours:
             x, y = contour.centroid
             yield {
@@ -106,11 +83,8 @@ def run_object_detector(movie, lower, upper, smoothing):
 
     input_frames = fish.read(local_path)[100:]
 
-    tracker = fish.ObjectTracker()
-
-    tracker = find_objects(
+    objects_by_frame = find_objects(
         input_frames,
-        tracker,
         edge_options={
             "lower_threshold": lower,
             "upper_threshold": upper,
@@ -123,7 +97,7 @@ def run_object_detector(movie, lower, upper, smoothing):
         lower=lower,
         upper=upper,
         smoothing=smoothing,
-        objects=list(object_rows(tracker)),
+        objects=list(object_rows(objects_by_frame)),
     )
 
 
@@ -155,7 +129,7 @@ if __name__ == "__main__":
             [f"file://{p.as_posix()}.hsv"]
             for p in (staging_path / kw["movie"] for kw in kwargs)
         ],
-        request_memory="5GB",
+        request_memory="1GB",
         request_disk="2GB",
         requirements="(Target.HasCHTCStaging == true)",
     )
