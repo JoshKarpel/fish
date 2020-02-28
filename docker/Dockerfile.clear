@@ -1,0 +1,8 @@
+FROM clearlinux:base
+
+RUN swupd bundle-add python-data-science machine-learning-basic
+
+ARG CACHEBUST=1
+
+RUN pip install --no-cache-dir git+https://github.com/JoshKarpel/fish.git \
+ && python -c "import fish"
