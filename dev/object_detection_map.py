@@ -38,7 +38,7 @@ def find_objects(frames, edge_options):
         edges = fish.get_edges(mod, **edge_options)
         contours = fish.get_contours(edges, area_cutoff=30)
 
-        objects_by_frame[frame_idx] = contours
+        objects_by_frame[frame_idx] = [make_object_output(c) for c in contours]
 
     return objects_by_frame
 
@@ -65,17 +65,15 @@ def apply_background_subtraction(background_model, frame):
     return background_model.apply(frame, learningRate=0)
 
 
-def object_rows(objects_by_frame):
-    for frame_index, contours in objects_by_frame.items():
-        for contour in contours:
-            x, y = contour.centroid
-            yield {
-                "frame": frame_index,
-                "x": x,
-                "y": y,
-                "area": contour.area,
-                "perimeter": contour.perimeter,
-            }
+def make_object_output(frame_index, contour):
+    x, y = contour.centroid
+    return {
+        "frame": frame_index,
+        "x": x,
+        "y": y,
+        "area": contour.area,
+        "perimeter": contour.perimeter,
+    }
 
 
 def run_object_detector(movie, lower, upper, smoothing):
@@ -97,7 +95,7 @@ def run_object_detector(movie, lower, upper, smoothing):
         lower=lower,
         upper=upper,
         smoothing=smoothing,
-        objects=list(object_rows(objects_by_frame)),
+        objects=objects_by_frame,
     )
 
 
