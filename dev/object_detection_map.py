@@ -38,7 +38,9 @@ def find_objects(frames, edge_options):
         edges = fish.get_edges(mod, **edge_options)
         contours = fish.get_contours(edges, area_cutoff=30)
 
-        objects_by_frame[frame_idx] = [make_object_output(c) for c in contours]
+        objects_by_frame[frame_idx] = [
+            make_object_output(frame_idx, c) for c in contours
+        ]
 
     return objects_by_frame
 
@@ -127,7 +129,7 @@ if __name__ == "__main__":
             [f"file://{p.as_posix()}.hsv"]
             for p in (staging_path / kw["movie"] for kw in kwargs)
         ],
-        request_memory="1GB",
+        request_memory="6GB",
         request_disk="2GB",
         requirements="(Target.HasCHTCStaging == true)",
     )
