@@ -31,7 +31,7 @@ import fish
 
 
 @dataclass(frozen=True)
-class Point:
+class Object:
     index: int
     frame: int
     x: float
@@ -43,13 +43,13 @@ class Point:
         return np.sqrt(((self.x - p.x) ** 2) + ((self.y - p.y) ** 2))
 
 
-def load_points(path):
+def load_objects(path):
     points = []
     with path.open(newline="") as f:
         spamreader = csv.reader(f, delimiter=",")
         for idx, (frame, x, y, area, perimeter) in enumerate(spamreader):
             points.append(
-                Point(
+                Object(
                     idx, int(frame), float(x), float(y), float(area), float(perimeter)
                 )
             )
@@ -169,16 +169,12 @@ def find_shortest_paths(g, start):
 
 def shortest_paths_between(g, starts, ends):
     shortest_paths = {}
+    ends_set = set(ends)
 
-    results = []
     for start in tqdm(starts, desc="Finding shortest paths"):
         rv = find_shortest_paths(g, start)
-        if rv is None:
-            continue
-        results.append(rv)
 
-    ends_set = set(ends)
-    for start, paths in results:
+        start, paths = rv
         for end, path in paths.items():
             if end not in ends_set:
                 continue
@@ -205,26 +201,30 @@ def find_paths_basic(graph, starts, ends):
     return paths
 
 
-def find_paths_increasing_weights(graph, starts, ends):
+def find_paths_increasing_weights_by_fixed_quantity(graph, starts, ends, quantity=10):
     graph = deepcopy(graph)
     starts = starts.copy()
     ends = ends.copy()
 
-    possible_paths = shortest_paths_between(graph, starts, ends)
-
     paths = {}
-    while len(possible_paths) > 0:
+
+    # TODO: why does the len of possible paths go to zero before we run out of starts and ends?
+    while True:
+        possible_paths = shortest_paths_between(graph, starts, ends)
+
+        if len(possible_paths) == 0:
+            break
+
         (start, end), path = min(
             possible_paths.items(), key=lambda kv: kv[1].cost(graph)
         )
+
         paths[start, end] = path
         starts.remove(start)
         ends.remove(end)
 
         for a, b in path.pairs:
-            graph[a][b]["weight"] += 10
-
-        possible_paths = shortest_paths_between(graph, starts, ends)
+            graph[a][b]["weight"] += quantity
 
     return paths
 
@@ -250,22 +250,18 @@ def make_span_plot(out, points_by_frame, paths, reported=None):
 
     span_percent = 100 * used_points / num_points
 
-    fig, ax_raw = plt.subplots()
+    fig = plt.figure(figsize=(12, 8), dpi=600)
+    ax_raw = fig.add_subplot(111)
 
     ax_raw.plot(num_points, color="blue", linestyle="--", label="# total points")
     ax_raw.plot(used_points, color="blue", label="# used points")
 
     ax_raw.set_xlim(0, len(num_points))
-    ax_raw.set_ylim(0, int(max(np.max(num_points), reported or 0) * 1.1))
+    ax_raw.set_ylim(0, int(max(np.nanquantile(num_points, 0.95), reported or 0) * 1.1))
 
     ax_raw.set_xlabel("frame #")
     ax_raw.set_ylabel("#", color="blue")
     ax_raw.tick_params(axis="y", labelcolor="blue")
-
-    if reported is not None:
-        ax_raw.axhline(
-            y=reported, color="black", linestyle=":",
-        )
 
     ax_frac = ax_raw.twinx()
     ax_frac.plot(span_percent, color="red", label="% used points")
@@ -277,10 +273,16 @@ def make_span_plot(out, points_by_frame, paths, reported=None):
 
     ax_frac.grid()
 
+    if reported is not None:
+        ax_raw.axhline(
+            y=reported, color="black", linestyle=":", linewidth=2,
+        )
+
     fig.legend(loc="lower left")
 
     fig.tight_layout()
     plt.savefig(str(out))
+    print(f"saved span plot to {out}")
 
 
 if __name__ == "__main__":
@@ -291,7 +293,8 @@ if __name__ == "__main__":
 
     prefix = "plus_10"
 
-    movies = [f"D1-{n}" for n in range(1, 13)] + [f"C1-{n}" for n in range(1, 4)]
+    movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
+    # movies = [f"D1-1"]
     reported_counts = [
         34,
         37,
@@ -311,7 +314,7 @@ if __name__ == "__main__":
     ]
 
     def do(movie, reported_count):
-        points = load_points(THIS_DIR / "out" / "paths" / f"{movie}__objects.csv")
+        points = load_objects(THIS_DIR / "out" / "paths" / f"{movie}__objects.csv")
 
         points_by_frame = group_points_by_frame(points)
         g = make_graph_from_points(points_by_frame, max_distance=50)
@@ -321,10 +324,13 @@ if __name__ == "__main__":
         g = max((g.subgraph(c) for c in nx.weakly_connected_components(g)), key=len)
 
         last_frame_index = max(points_by_frame.keys())
-        starts = points_by_frame[0]
-        ends = points_by_frame[last_frame_index]
 
-        paths = find_paths_increasing_weights(g, starts, ends)
+        starts = [n for n in g.nodes if n.frame == 0]
+        ends = [n for n in g.nodes if n.frame == last_frame_index]
+
+        paths = find_paths_increasing_weights_by_fixed_quantity(g, starts, ends)
+
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
 
         make_span_plot(
             OUT_DIR / f"{prefix}__{movie}__span.png",
@@ -336,8 +342,8 @@ if __name__ == "__main__":
         frames = fish.read(DATA_DIR / f"{movie}.hsv")[100:]
         make_movie(OUT_DIR / f"{prefix}__{movie}__test.mp4", frames, paths)
 
-    for movie, reported_count in zip(movies, reported_counts):
-        do(movie, reported_count)
+    # for movie, reported_count in zip(movies, reported_counts):
+    #     do(movie, reported_count)
 
-    # with Pool(processes=min(os.cpu_count() - 1, 4)) as p:
-    #     p.starmap(do, zip(movies, reported_counts))
+    with Pool(processes=os.cpu_count() - 1) as p:
+        p.starmap(do, zip(movies, reported_counts))

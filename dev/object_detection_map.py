@@ -155,7 +155,7 @@ if __name__ == "__main__":
             [f"file://{p.as_posix()}.hsv"]
             for p in (staging_path / kw["movie"] for kw in kwargs)
         ],
-        request_memory="4GB",
+        request_memory="5GB",
         request_disk="2GB",
         requirements="(Target.HasCHTCStaging == true)",
     )

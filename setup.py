@@ -19,5 +19,5 @@ setup(
         "Operating System :: Microsoft :: Windows",
         "Operating System :: POSIX",
     ],
-    packages=find_packages(exclude=["tests"]),
+    packages=find_packages(exclude=["tests", "dev"]),
 )
