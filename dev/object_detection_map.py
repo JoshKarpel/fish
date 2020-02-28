@@ -13,8 +13,6 @@ import fish
 
 import htmap
 
-logging.basicConfig()
-
 
 def diamond(n):
     a = np.arange(n)
@@ -144,21 +142,23 @@ if __name__ == "__main__":
     uppers = eval(input("Edge detector upper thresholds? "))
     smoothings = eval(input("Edge detector smoothings? "))
 
+    kwargs = [
+        dict(movie=movie, lower=lower, upper=upper, smoothing=smoothing)
+        for movie, lower, upper, smoothing in itertools.product(
+            movies, lowers, uppers, smoothings
+        )
+    ]
+
     htmap.settings["DOCKER.IMAGE"] = input("Docker Image? ")
     mo = htmap.MapOptions(
         input_files=[
-            [f"file://{p.as_posix()}.hsv"] for p in (staging_path / m for m in movies)
+            [f"file://{p.as_posix()}.hsv"]
+            for p in (staging_path / kw["movie"] for kw in kwargs)
         ],
-        request_memory="1GB",
+        request_memory="4GB",
         request_disk="2GB",
         requirements="(Target.HasCHTCStaging == true)",
     )
 
-    with htmap.build_map(run_object_detector, map_options=mo, tag=tag) as builder:
-        for movie, lower, upper, smoothing in itertools.product(
-            movies, lowers, uppers, smoothings
-        ):
-            builder(movie, lower, upper, smoothing)
-
-    map = builder.map
+    map = htmap.starmap(run_object_detector, kwargs=kwargs, map_options=mo, tag=tag)
     print(map.tag)
