@@ -151,7 +151,9 @@ if __name__ == "__main__":
 
     htmap.settings["DOCKER.IMAGE"] = input("Docker Image? ")
     mo = htmap.MapOptions(
-        input_files=[f"file://{p}" for p in (staging_path / m for m in movies)],
+        input_files=[
+            [f"file://{p.as_posix()}"] for p in (staging_path / m for m in movies)
+        ],
         request_memory="1GB",
         request_disk="2GB",
         requirements="(Target.HasCHTCStaging == true)",
