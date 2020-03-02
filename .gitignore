@@ -111,3 +111,5 @@ venv.bak/
 *.avi
 *.npy
 *.hsv
+
+*.json

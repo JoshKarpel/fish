@@ -131,6 +131,7 @@ if __name__ == "__main__":
         ],
         request_memory="6GB",
         request_disk="2GB",
+        max_idle="100",
         requirements="(Target.HasCHTCStaging == true)",
     )
 
