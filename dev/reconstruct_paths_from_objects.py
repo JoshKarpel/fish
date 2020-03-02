@@ -100,7 +100,7 @@ GREEN = (0, 255, 0)
 RED = (0, 0, 255)
 YELLOW = (0, 255, 255)
 
-LOOK = 50
+LOOK = 20
 
 LINE_OPTS = dict(isClosed=False, thickness=1, lineType=cv.LINE_AA)
 
@@ -232,7 +232,7 @@ def find_paths_increasing_weights_by_fixed_quantity(graph, starts, ends, quantit
 def make_movie(out, frames, paths):
     f = frames.copy()
     fish.make_movie(
-        out, frames=original_with_paths(f, paths.values()), num_frames=len(f), fps=5
+        out, frames=original_with_paths(f, paths.values()), num_frames=len(f), fps=10
     )
 
 
@@ -310,7 +310,9 @@ if __name__ == "__main__":
         starts = [n for n in g.nodes if n.frame == 0]
         ends = [n for n in g.nodes if n.frame == last_frame_index]
 
-        paths = find_paths_increasing_weights_by_fixed_quantity(g, starts, ends)
+        paths = find_paths_increasing_weights_by_fixed_quantity(
+            g, starts, ends, quantity=10
+        )
 
         OUT_DIR.mkdir(parents=True, exist_ok=True)
 

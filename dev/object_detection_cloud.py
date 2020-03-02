@@ -32,7 +32,7 @@ def group_by_key(dicts, key):
     return groups
 
 
-def make_object_count_by_frame_comparison_plot(detections, out):
+def make_object_count_by_frame_comparison_plot(detections, expected, out):
     fig = plt.figure(figsize=(12, 8), dpi=600)
 
     ax = fig.add_subplot(111)
@@ -46,6 +46,7 @@ def make_object_count_by_frame_comparison_plot(detections, out):
         counts, color="C0", alpha=0.01,
     )
     ax.plot(avg, color="black")
+    ax.axhline(expected, color="C1", linestyle="--")
 
     ax.set_xlim(0, counts.shape[0])
 
@@ -63,9 +64,15 @@ if __name__ == "__main__":
     path = DATA / "scan-5__objects.json"
     detections = list(read_detections(path))
 
-    by_movie = group_by_key(detections, "movie",)
+    by_movie = group_by_key(detections, "movie")
+    expected_counts = dict(
+        zip(
+            [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)],
+            [34, 37, 38, 26, 21, 24, 39, 34, 22, 36, 34, 42, 52, 52, 60],
+        )
+    )
 
     for movie, group in by_movie.items():
         print(f"Making plot for {movie}")
         out = OUT / f"{movie}__count_by_frame_comparison.png"
-        make_object_count_by_frame_comparison_plot(group, out)
+        make_object_count_by_frame_comparison_plot(group, expected_counts[movie], out)

@@ -20,7 +20,7 @@ def diamond(n):
     return ((b[:, None] + b) >= (n - 1) // 2).astype(np.uint8)
 
 
-def find_objects(frames, edge_options):
+def find_objects(frames, edge_options, contour_options):
     backsub = train_background_subtractor(frames, iterations=5)
 
     KERNEL_3 = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
@@ -36,7 +36,7 @@ def find_objects(frames, edge_options):
 
         # find edges, and from edges, contours
         edges = fish.get_edges(mod, **edge_options)
-        contours = fish.get_contours(edges, area_cutoff=30)
+        contours = fish.get_contours(edges, **contour_options)
 
         objects_by_frame[frame_idx] = [
             make_object_output(frame_idx, c) for c in contours
@@ -78,7 +78,7 @@ def make_object_output(frame_index, contour):
     }
 
 
-def run_object_detector(movie, lower, upper, smoothing):
+def run_object_detector(movie, lower, upper, smoothing, area_cutoff):
     local_path = Path(f"{movie}.hsv")
 
     input_frames = fish.read(local_path)[100:]
@@ -90,6 +90,7 @@ def run_object_detector(movie, lower, upper, smoothing):
             "upper_threshold": upper,
             "smoothing": smoothing,
         },
+        contour_options={"area_cutoff": area_cutoff},
     )
 
     return dict(
@@ -97,6 +98,7 @@ def run_object_detector(movie, lower, upper, smoothing):
         lower=lower,
         upper=upper,
         smoothing=smoothing,
+        area_cutoff=area_cutoff,
         objects=objects_by_frame,
     )
 
@@ -115,6 +117,7 @@ if __name__ == "__main__":
     lowers = eval(input("Edge detector lower thresholds? "))
     uppers = eval(input("Edge detector upper thresholds? "))
     smoothings = eval(input("Edge detector smoothings? "))
+    area_cutoffs = eval(input("Area cutoffs? "))
 
     kwargs = [
         dict(movie=movie, lower=lower, upper=upper, smoothing=smoothing)
