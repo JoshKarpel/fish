@@ -120,9 +120,15 @@ if __name__ == "__main__":
     area_cutoffs = eval(input("Area cutoffs? "))
 
     kwargs = [
-        dict(movie=movie, lower=lower, upper=upper, smoothing=smoothing)
-        for movie, lower, upper, smoothing in itertools.product(
-            movies, lowers, uppers, smoothings
+        dict(
+            movie=movie,
+            lower=lower,
+            upper=upper,
+            smoothing=smoothing,
+            area_cutoff=area_cutoff,
+        )
+        for movie, lower, upper, smoothing, area_cutoff in itertools.product(
+            movies, lowers, uppers, smoothings, area_cutoffs
         )
     ]
 
