@@ -36,7 +36,7 @@ def find_objects(frames, edge_options, contour_options):
 
         # find edges, and from edges, contours
         edges = fish.get_edges(mod, **edge_options)
-        contours = fish.get_contours(edges, **contour_options)
+        contours = fish.detect_objects(edges, **contour_options)
 
         objects_by_frame[frame_idx] = [
             make_object_output(frame_idx, c) for c in contours

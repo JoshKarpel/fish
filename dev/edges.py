@@ -47,7 +47,7 @@ def make_frames(
 
         # find edges, and from edges, contours
         edges = fish.get_edges(mod, **edge_options)
-        contours = fish.get_contours(edges, area_cutoff=30)
+        contours = fish.detect_objects(edges, area_cutoff=30)
 
         tracker.update_tracks(contours, frame_idx)
         tracker.check_for_locks(frame_idx)
@@ -57,7 +57,7 @@ def make_frames(
         if draw_bounding_rectangles:
             img = fish.draw_bounding_rectangles(img, tracker)
         if draw_tracks:
-            img = fish.draw_live_object_tracks(img, tracker, track_length=100)
+            img = fish.draw_object_tracks(img, tracker, track_length=100)
         yield img
 
 
