@@ -101,9 +101,10 @@ class ObjectTrack:
     positions: List[np.array] = dataclasses.field(default_factory=list)
     objects: List[Object] = dataclasses.field(default_factory=list)
     _is_locked: bool = False
+    multiplicity: int = 1
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.id}, objects = {[o.id for o in self.objects]})"
+        return f"{self.__class__.__name__}({self.id}, mult = {self.multiplicity}, objects = {[o.id for o in self.objects]})"
 
     def __hash__(self):
         return hash((self.__class__, self.id))
@@ -151,7 +152,7 @@ class ObjectTrack:
 
 
 class ObjectTracker:
-    def __init__(self, snap_to: int = 20, lock_after: int = 5):
+    def __init__(self, snap_to: int = 50, lock_after: int = 5):
         self.snap_to = snap_to
         self.lock_after = lock_after
 
@@ -165,28 +166,29 @@ class ObjectTracker:
     def live_tracks(self):
         return {oid: track for oid, track in self.tracks.items() if track.is_alive}
 
-    def update_tracks(self, contours, frame_idx):
+    def update_tracks(self, objects, frame_idx):
         print("frame_idx", frame_idx)
         # if we have no tracks yet, just make everything a track
         if len(self.tracks) == 0:
-            for contour in contours:
-                self.register(frame_idx, contour)
+            for new_object in objects:
+                self.register(frame_idx, new_object)
             return
 
-        print(contours)
+        print(objects)
 
+        # assign objects to tracks
         assigned_contours = set()
         for oid, track in self.live_tracks().items():
             if len(track.positions) > 2:
-                predicted = track.predict()
+                new_object = track.predict()
             else:
-                predicted = track.positions[-1]
+                new_object = track.positions[-1]
 
             closest = min(
-                contours, key=lambda c: distance_between(c.centroid, predicted),
+                objects, key=lambda c: distance_between(c.centroid, new_object),
             )
 
-            if distance_between(closest.centroid, predicted) > self.snap_to:
+            if distance_between(closest.centroid, new_object) > self.snap_to:
                 continue
 
             print(f"assigning {closest} to {track}")
@@ -194,29 +196,52 @@ class ObjectTracker:
             track.update(frame_idx, closest)
             assigned_contours.add(closest)
 
-        # register leftover centroids as new objects
-        for contour in set(contours) - assigned_contours:
-            print(f"registering new track for unassigned contour {contour}")
-            self.register(frame_idx, contour)
-
-    def register(self, frame_idx: int, contour):
-        id = self._next_id()
-        track = ObjectTrack(id)
-        track.update(frame_idx, contour)
-        self.tracks[id] = track
-
-    def check_for_locks(self, frame_idx: int):
-        by_position = collections.defaultdict(list)
-        for oid, track in self.tracks.items():
+        # lock tracks that haven't had an object assigned recently
+        by_object = collections.defaultdict(list)
+        for oid, track in self.live_tracks().items():
             if track.last_updated_frame + self.lock_after < frame_idx:
                 track.lock()
 
-            by_position[tuple(track.positions[-1])].append(track)
+            by_object[track.objects[-1]].append(track)
 
-        for tracks in by_position.values():
+        # detect MERGES
+        for maybe_merged_object, tracks in by_object.items():
             if len(tracks) > 1:
                 for track in tracks:
                     track.lock()
+                self.register(
+                    frame_idx,
+                    maybe_merged_object,
+                    multiplicity=sum(t.multiplicity for t in tracks),
+                )
+
+        # register leftover objects as new tracks
+        for new_object in set(objects) - assigned_contours:
+            print(f"registering new track for unassigned contour {new_object}")
+            self.register(frame_idx, new_object)
+
+            # detect SPLITS
+            closest_multitrack = min(
+                (t for t in self.live_tracks().values() if t.multiplicity > 1),
+                key=lambda c: distance_between(
+                    track.objects[-1].centroid, new_object.centroid
+                ),
+            )
+            print("split is from", closest_multitrack)
+            d = distance_between(
+                closest_multitrack.objects[-1].centroid, new_object.centroid
+            )
+            print("d", d)
+            if d > self.snap_to:
+                continue
+
+            closest_multitrack.multiplicity -= 1
+
+    def register(self, frame_idx: int, object, **kwargs):
+        id = self._next_id()
+        track = ObjectTrack(id, **kwargs)
+        track.update(frame_idx, object)
+        self.tracks[id] = track
 
 
 def total_dist(points):
@@ -229,32 +254,13 @@ def draw_bounding_rectangles(
     mark_centroid: bool = False,
     display_area: bool = False,
     display_perimeter: bool = False,
-    mark_slow: bool = False,
 ):
     contours = [
         track.objects[-1] for track in tracker.tracks.values() if track.is_alive
     ]
     boxes = [cv.boxPoints(c.bounding_rectangle).astype(np.int0) for c in contours]
 
-    if mark_slow:
-        recent_track = [
-            [c.centroid for c in track.objects[-11:-1]]
-            for track in tracker.tracks.values()
-            if track.is_alive
-        ]
-        moving = [len(rt) > 1 and total_dist(rt) > 3 * len(rt) for rt in recent_track]
-
-        for box, is_moving in zip(boxes, moving):
-            cv.drawContours(
-                frame,
-                [box],
-                -1,
-                color=GREEN if is_moving else RED,
-                thickness=1,
-                lineType=cv.LINE_AA,
-            )
-    else:
-        cv.drawContours(frame, boxes, -1, color=GREEN, thickness=1, lineType=cv.LINE_AA)
+    cv.drawContours(frame, boxes, -1, color=GREEN, thickness=1, lineType=cv.LINE_AA)
 
     for c in contours:
         x, y = c.centroid_ints
@@ -319,7 +325,7 @@ def draw_object_tracks(
         for oid, curve in object_id_to_track.items():
             cv.putText(
                 frame,
-                f"{oid}",
+                f"{oid}(x{object_tracker.tracks[oid].multiplicity})",
                 (curve[-1, 0] + 15, curve[-1, 1] + 15),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=0.5,

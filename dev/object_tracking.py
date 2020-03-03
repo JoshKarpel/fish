@@ -52,7 +52,6 @@ def track_objects(
         contours = fish.detect_objects(edges, area_cutoff=10)
 
         tracker.update_tracks(contours, frame_idx)
-        tracker.check_for_locks(frame_idx)
 
         # produce the movie frame that we'll actually write out to disk
         img = cv.cvtColor((frame if draw_on_original else mod), cv.COLOR_GRAY2BGR)
