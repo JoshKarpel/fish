@@ -167,14 +167,14 @@ class ObjectTracker:
         return {oid: track for oid, track in self.tracks.items() if track.is_alive}
 
     def update_tracks(self, objects, frame_idx):
-        print("frame_idx", frame_idx)
+        # print("frame_idx", frame_idx)
         # if we have no tracks yet, just make everything a track
         if len(self.tracks) == 0:
             for new_object in objects:
                 self.register(frame_idx, new_object)
             return
 
-        print(objects)
+        # print(objects)
 
         # assign objects to tracks
         assigned_contours = set()
@@ -184,14 +184,18 @@ class ObjectTracker:
             else:
                 new_object = track.positions[-1]
 
-            closest = min(
-                objects, key=lambda c: distance_between(c.centroid, new_object),
-            )
+            try:
+                closest = min(
+                    objects, key=lambda c: distance_between(c.centroid, new_object),
+                )
+            except ValueError:
+                # min of an empty sequence
+                continue
 
             if distance_between(closest.centroid, new_object) > self.snap_to:
                 continue
 
-            print(f"assigning {closest} to {track}")
+            # print(f"assigning {closest} to {track}")
 
             track.update(frame_idx, closest)
             assigned_contours.add(closest)
@@ -217,25 +221,38 @@ class ObjectTracker:
 
         # register leftover objects as new tracks
         for new_object in set(objects) - assigned_contours:
-            print(f"registering new track for unassigned contour {new_object}")
+            # print(f"registering new track for unassigned contour {new_object}")
             self.register(frame_idx, new_object)
 
             # detect SPLITS
-            closest_multitrack = min(
-                (t for t in self.live_tracks().values() if t.multiplicity > 1),
-                key=lambda c: distance_between(
-                    track.objects[-1].centroid, new_object.centroid
-                ),
-            )
-            print("split is from", closest_multitrack)
+            # todo: instead of this distance test, test for bounding box intersections against the previous frame
+            # what if we go the multiplicity wrong the first time around?
+            try:
+                closest_multitrack = min(
+                    (t for t in self.live_tracks().values() if t.multiplicity > 1),
+                    key=lambda c: distance_between(
+                        track.objects[-1].centroid, new_object.centroid
+                    ),
+                )
+            except ValueError:
+                # min of an empty sequence
+                continue
+
+            # print("split is from", closest_multitrack)
             d = distance_between(
                 closest_multitrack.objects[-1].centroid, new_object.centroid
             )
-            print("d", d)
+            # print("d", d)
             if d > self.snap_to:
                 continue
 
-            closest_multitrack.multiplicity -= 1
+            # make a new track with one less object in it
+            closest_multitrack.lock()
+            self.register(
+                frame_idx,
+                closest_multitrack.objects[-1],
+                multiplicity=closest_multitrack.multiplicity - 1,
+            )
 
     def register(self, frame_idx: int, object, **kwargs):
         id = self._next_id()
@@ -328,7 +345,7 @@ def draw_object_tracks(
                 f"{oid}(x{object_tracker.tracks[oid].multiplicity})",
                 (curve[-1, 0] + 15, curve[-1, 1] + 15),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
-                fontScale=0.5,
+                fontScale=0.3,
                 color=YELLOW,
                 thickness=1,
                 lineType=cv.LINE_AA,

@@ -36,20 +36,20 @@ def track_objects(
     draw_bounding_rectangles=True,
     draw_tracks=True,
 ):
-    # backsub = train_background_subtractor(frames, iterations=5)
+    backsub = train_background_subtractor(frames, iterations=5)
 
     objects_by_frame = {}
     for frame_idx, frame in enumerate(tqdm(frames, desc="Detecting objects")):
         # produce the "modified" frame that we actually perform tracking on
         mod = frame.copy()
-        # mod = apply_background_subtraction(backsub, frame)
+        mod = apply_background_subtraction(backsub, frame)
 
         mod = cv.morphologyEx(mod, cv.MORPH_CLOSE, KERNEL_5)
         mod = cv.morphologyEx(mod, cv.MORPH_OPEN, KERNEL_3)
 
         # find edges, and from edges, contours
         edges = fish.get_edges(mod, **edge_options)
-        contours = fish.detect_objects(edges, area_cutoff=10)
+        contours = fish.detect_objects(edges, area_cutoff=30)
 
         tracker.update_tracks(contours, frame_idx)
 
@@ -59,7 +59,7 @@ def track_objects(
             img = fish.draw_bounding_rectangles(img, tracker)
         if draw_tracks:
             img = fish.draw_object_tracks(
-                img, tracker, track_length=100, live_only=False
+                img, tracker, track_length=100, live_only=True
             )
         yield img
 
@@ -103,7 +103,8 @@ if __name__ == "__main__":
     DATA = HERE.parent / "data"
     OUT = HERE / "out" / Path(__file__).stem
 
-    input_frames = fish.read((OUT.parent / "fake" / f"fake.mp4"))
+    # input_frames = fish.read((OUT.parent / "fake" / f"fake.mp4"))
+    input_frames = fish.read((DATA / f"D1-1.hsv"))[100:]
 
     tracker = fish.ObjectTracker()
 

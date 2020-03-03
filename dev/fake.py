@@ -40,12 +40,15 @@ def add_objects(frame, frame_index, objects):
 
 if __name__ == "__main__":
     base_frame = np.zeros((500, 500), dtype=np.uint8)
-    length = 20
+    length = 30
 
     objects = [
         Object(size=10, start=np.array([250, 200]), velocity=np.array([0, 5])),
         Object(size=10, start=np.array([200, 250]), velocity=np.array([5, 0])),
+        Object(size=10, start=np.array([180, 250]), velocity=np.array([7, 0])),
+        # Object(size=10, start=np.array([200, 200]), velocity=np.array([5, 5])),
         # Object(size=10, start=np.array([50, 50]), velocity=np.array([5, 0])),
+        # Object(size=10, start=np.array([230, 230]), velocity=np.array([0, 5])),
     ]
 
     fish.make_movie(
