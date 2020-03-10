@@ -7,23 +7,15 @@ from copy import deepcopy
 from multiprocessing import Pool
 from dataclasses import dataclass
 import os
+import pickle
 
 from tqdm import tqdm, trange
 
 import numpy as np
 
-from scipy import ndimage as ndi
-
 import networkx as nx
 
 import matplotlib.pyplot as plt
-
-import skimage
-import skimage.feature
-import skimage.filters
-import skimage.morphology
-import skimage.segmentation as seg
-import skimage.measure
 
 import cv2 as cv
 
@@ -283,6 +275,18 @@ def make_span_plot(out, points_by_frame, paths, reported=None):
     print(f"saved span plot to {out}")
 
 
+def save_paths(out, paths):
+    with out.open(mode="wb") as f:
+        pickle.dump(paths, f)
+
+    return out
+
+
+def load_paths(path):
+    with path.open(mode="rb") as f:
+        return pickle.load(f)
+
+
 if __name__ == "__main__":
     THIS_DIR = Path(__file__).absolute().parent
     ROOT_DIR = THIS_DIR.parent
@@ -310,9 +314,14 @@ if __name__ == "__main__":
         starts = [n for n in g.nodes if n.frame == 0]
         ends = [n for n in g.nodes if n.frame == last_frame_index]
 
-        paths = find_paths_increasing_weights_by_fixed_quantity(
-            g, starts, ends, quantity=10
-        )
+        path_file = OUT_DIR / f"{prefix}__{movie}.paths"
+        if path_file.exists():
+            paths = load_paths(path_file)
+        else:
+            paths = find_paths_increasing_weights_by_fixed_quantity(
+                g, starts, ends, quantity=10
+            )
+            save_paths(path_file, paths)
 
         OUT_DIR.mkdir(parents=True, exist_ok=True)
 
