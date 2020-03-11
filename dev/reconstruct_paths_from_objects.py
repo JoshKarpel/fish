@@ -8,6 +8,7 @@ from multiprocessing import Pool
 from dataclasses import dataclass
 import os
 import pickle
+from typing import List, Mapping
 
 from tqdm import tqdm, trange
 
@@ -136,6 +137,9 @@ def original_with_paths(frames, paths):
 class ObjectPath:
     points: list
 
+    def __len__(self):
+        return len(self.points)
+
     @property
     def coordinates(self):
         return np.array([[point.x, point.y] for point in self.points])
@@ -149,6 +153,14 @@ class ObjectPath:
 
     def __str__(self):
         return f'Path({"->".join(str(p.index) for p in self.points)})'
+
+    @property
+    def velocity(self):
+        return np.diff(self.coordinates, axis=0)
+
+    @property
+    def speed(self):
+        return np.linalg.norm(self.velocity, axis=1)
 
 
 def find_shortest_paths(g, start):
@@ -287,6 +299,139 @@ def load_paths(path):
         return pickle.load(f)
 
 
+@dataclass(frozen=True)
+class HandCounted:
+    movie: str
+    times_to_counts: Mapping[int, int]
+    total: int
+
+    @property
+    def times(self):
+        return np.array(list(self.times_to_counts.keys()))
+
+    @property
+    def counts(self):
+        return np.array(list(self.times_to_counts.values()))
+
+
+def load_hand_data(path):
+    data = []
+    with path.open(mode="r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            data.append(
+                HandCounted(
+                    movie=row.pop("Movie"),
+                    total=int(row.pop("Total")),
+                    times_to_counts={int(k): int(v) for k, v in row.items()},
+                )
+            )
+    return data
+
+
+def moving_average(arr, width):
+    return np.convolve(arr, np.ones(width), "valid") / width
+
+
+def make_single_comparison_plot(
+    paths, hand_counted, out, speed_thresholds=None, fps=10
+):
+    if speed_thresholds is None:
+        speed_thresholds = []
+
+    fig = plt.figure(figsize=(12, 8), dpi=600)
+    ax = fig.add_subplot(111)
+
+    comparison_plot_on_axis(
+        ax, paths, hand_counted, speed_thresholds=speed_thresholds, fps=fps
+    )
+
+    fig.legend()
+
+    fig.tight_layout()
+    plt.savefig(str(out))
+    print(f"saved span plot to {out}")
+
+
+def make_tiled_comparison_plot(paths, hand_counted, out, speed_thresholds=None, fps=10):
+    fig = plt.figure(figsize=(16, 9), dpi=600)
+    axs = fig.subplots(nrows=4, ncols=4)
+
+    for idx, (ax, movie) in enumerate(zip(axs.flatten(), hand_counted.keys())):
+        comparison_plot_on_axis(
+            ax,
+            paths[movie],
+            hand_counted[movie],
+            speed_thresholds,
+            title=movie,
+            fps=fps,
+            labels=idx == 0,
+        )
+
+    axs.flatten()[-1].axis("off")
+    for ax in axs.flatten():
+        for item in ax.get_xticklabels() + ax.get_yticklabels():
+            item.set_fontsize(8)
+
+    fig.legend(loc="lower right")
+
+    fig.tight_layout()
+    plt.savefig(str(out))
+    print(f"saved span plot to {out}")
+
+
+def comparison_plot_on_axis(
+    ax, paths, hand_counted, speed_thresholds, title="", fps=10, labels=True,
+):
+    ax.axhline(
+        hand_counted.total,
+        color="black",
+        linestyle="--",
+        linewidth=3,
+        label="Total (Hand)" if labels else None,
+    )
+    ax.step(
+        x=hand_counted.times * fps,
+        y=hand_counted.counts,
+        color="black",
+        linewidth=3,
+        label="Paralyzed (Hand)" if labels else None,
+    )
+
+    ax.axhline(
+        len(paths),
+        color="C0",
+        linestyle="--",
+        linewidth=2,
+        label="Total (Paths)" if labels else None,
+    )
+
+    all_speeds = np.stack([path.speed for path in paths.values()]).flatten()
+    quantiles = np.quantile(all_speeds, [0.1, 0.5, 0.9])
+    print(quantiles)
+    num_frames = len(next(iter(paths.values()))) - 1
+    num_not_moving = {threshold: np.zeros(num_frames) for threshold in speed_thresholds}
+    for (start, end), path in paths.items():
+        speed = path.speed
+        for threshold, arr in num_not_moving.items():
+            arr += speed < threshold
+
+    COLORS = ["C1", "C2", "C3", "C4"]
+    for (threshold, arr), color in zip(num_not_moving.items(), COLORS):
+        ax.plot(arr, color=color, alpha=0.1)
+        ax.plot(
+            moving_average(arr, 10 * fps),
+            color=color,
+            label=f"Speed < {threshold} px/frame" if labels else None,
+        )
+
+    ax.set_xlim(0, num_frames)
+
+    ax.set_title(title)
+    ax.set_xlabel("Frame")
+    ax.set_ylabel("Count")
+
+
 if __name__ == "__main__":
     THIS_DIR = Path(__file__).absolute().parent
     ROOT_DIR = THIS_DIR.parent
@@ -296,47 +441,70 @@ if __name__ == "__main__":
     prefix = "plus_10"
 
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
-    # movies = [f"D1-1"]
-    reported_counts = [34, 37, 38, 26, 21, 24, 39, 34, 22, 36, 34, 42, 52, 52, 60]
 
-    def do(movie, reported_count):
-        points = load_objects(THIS_DIR / "out" / "paths" / f"{movie}__objects.csv")
+    hand_by_movie = {hc.movie: hc for hc in load_hand_data(DATA_DIR / "counts.csv")}
+    paths_by_movie = {
+        movie: load_paths(OUT_DIR / f"{prefix}__{movie}.paths") for movie in movies
+    }
 
-        points_by_frame = group_points_by_frame(points)
-        g = make_graph_from_points(points_by_frame, max_distance=50)
+    make_tiled_comparison_plot(
+        paths_by_movie,
+        hand_by_movie,
+        OUT_DIR / f"{prefix}__tiled__comparison.png",
+        speed_thresholds=[0.1, 0.5, 1, 5],
+    )
 
-        # the largest connected component of the graph should be the main dish
-        # because the graph is directed, we want "weak connection", which is equivalent to normal connection for undirected graphs
-        g = max((g.subgraph(c) for c in nx.weakly_connected_components(g)), key=len)
+    # for movie, hc in hand_by_movie.items():
+    #     print(movie)
+    #
+    #     paths = load_paths(OUT_DIR / f"{prefix}__{movie}.paths")
+    #     print(len(paths))
+    #
+    #     make_single_comparison_plot(
+    #         paths=paths,
+    #         hand_counted=hc,
+    #         speed_thresholds=[1, 5, 10],
+    #         out=OUT_DIR / f"{prefix}__{movie}__comparison.png",
+    #     )
 
-        last_frame_index = max(points_by_frame.keys())
-
-        starts = [n for n in g.nodes if n.frame == 0]
-        ends = [n for n in g.nodes if n.frame == last_frame_index]
-
-        path_file = OUT_DIR / f"{prefix}__{movie}.paths"
-        if path_file.exists():
-            paths = load_paths(path_file)
-        else:
-            paths = find_paths_increasing_weights_by_fixed_quantity(
-                g, starts, ends, quantity=10
-            )
-            save_paths(path_file, paths)
-
-        OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-        make_span_plot(
-            OUT_DIR / f"{prefix}__{movie}__span.png",
-            points_by_frame,
-            paths,
-            reported=reported_count,
-        )
-
-        frames = fish.read(DATA_DIR / f"{movie}.hsv")[100:]
-        make_movie(OUT_DIR / f"{prefix}__{movie}__test.mp4", frames, paths)
-
+    # def do(movie, reported_count):
+    #     points = load_objects(THIS_DIR / "out" / "paths" / f"{movie}__objects.csv")
+    #
+    #     points_by_frame = group_points_by_frame(points)
+    #     g = make_graph_from_points(points_by_frame, max_distance=50)
+    #
+    #     # the largest connected component of the graph should be the main dish
+    #     # because the graph is directed, we want "weak connection", which is equivalent to normal connection for undirected graphs
+    #     g = max((g.subgraph(c) for c in nx.weakly_connected_components(g)), key=len)
+    #
+    #     last_frame_index = max(points_by_frame.keys())
+    #
+    #     starts = [n for n in g.nodes if n.frame == 0]
+    #     ends = [n for n in g.nodes if n.frame == last_frame_index]
+    #
+    #     path_file = OUT_DIR / f"{prefix}__{movie}.paths"
+    #     if path_file.exists():
+    #         paths = load_paths(path_file)
+    #     else:
+    #         paths = find_paths_increasing_weights_by_fixed_quantity(
+    #             g, starts, ends, quantity=10
+    #         )
+    #         save_paths(path_file, paths)
+    #
+    #     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    #
+    #     make_span_plot(
+    #         OUT_DIR / f"{prefix}__{movie}__span.png",
+    #         points_by_frame,
+    #         paths,
+    #         reported=reported_count,
+    #     )
+    #
+    #     frames = fish.read(DATA_DIR / f"{movie}.hsv")[100:]
+    #     make_movie(OUT_DIR / f"{prefix}__{movie}__test.mp4", frames, paths)
+    #
     # for movie, reported_count in zip(movies, reported_counts):
     #     do(movie, reported_count)
 
-    with Pool(processes=os.cpu_count() - 1) as p:
-        p.starmap(do, zip(movies, reported_counts))
+    # with Pool(processes=os.cpu_count() - 1) as p:
+    #     p.starmap(do, zip(movies, reported_counts))
