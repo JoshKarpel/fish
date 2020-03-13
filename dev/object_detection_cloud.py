@@ -61,7 +61,7 @@ def make_object_count_by_frame_comparison_plot(detections, expected, out):
 
 
 if __name__ == "__main__":
-    path = DATA / "scan-5__objects.json"
+    path = DATA / "scan-area__objects.json"
     detections = list(read_detections(path))
 
     by_movie = group_by_key(detections, "movie")
