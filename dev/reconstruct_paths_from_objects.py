@@ -288,6 +288,7 @@ def make_span_plot(out, points_by_frame, paths, reported=None):
 
 
 def save_paths(out, paths):
+    out.parent.mkdir(parents = True, exist_ok = True)
     with out.open(mode="wb") as f:
         pickle.dump(paths, f)
 
@@ -438,14 +439,73 @@ if __name__ == "__main__":
     DATA_DIR = ROOT_DIR / "data"
     OUT_DIR = THIS_DIR / "out" / Path(__file__).stem
 
+    OUT_DIR.mkdir(parents = True, exist_ok = True)
+
     prefix = "plus_10"
 
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
 
     hand_by_movie = {hc.movie: hc for hc in load_hand_data(DATA_DIR / "counts.csv")}
+    reported_counts = [hand_by_movie[movie].total for movie in movies]
+
+    def do(movie, reported_count):
+        points = load_objects(THIS_DIR / "out" / "object_detection" / f"{movie}__objects.csv")
+
+        points_by_frame = group_points_by_frame(points)
+        g = make_graph_from_points(points_by_frame, max_distance=50)
+
+        # the largest connected component of the graph should be the main dish
+        # because the graph is directed, we want "weak connection", which is equivalent to normal connection for undirected graphs
+        g = max((g.subgraph(c) for c in nx.weakly_connected_components(g)), key=len)
+
+        last_frame_index = max(points_by_frame.keys())
+
+        starts = [n for n in g.nodes if n.frame == 0]
+        ends = [n for n in g.nodes if n.frame == last_frame_index]
+
+        path_file = OUT_DIR / f"{prefix}__{movie}.paths"
+        if path_file.exists():
+            paths = load_paths(path_file)
+        else:
+            paths = find_paths_increasing_weights_by_fixed_quantity(
+                g, starts, ends, quantity=10
+            )
+            save_paths(path_file, paths)
+
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+        make_span_plot(
+            OUT_DIR / f"{prefix}__{movie}__span.png",
+            points_by_frame,
+            paths,
+            reported=reported_count,
+        )
+
+        frames = fish.read(DATA_DIR / f"{movie}.hsv")[100:]
+        make_movie(OUT_DIR / f"{prefix}__{movie}__test.mp4", frames, paths)
+
+    # for movie, reported_count in zip(movies, reported_counts):
+    #     do(movie, reported_count)
+
+    with Pool(processes=os.cpu_count() - 1) as p:
+        p.starmap(do, zip(movies, reported_counts))
+
     paths_by_movie = {
         movie: load_paths(OUT_DIR / f"{prefix}__{movie}.paths") for movie in movies
     }
+
+    for movie, hc in hand_by_movie.items():
+        print(movie)
+
+        paths = load_paths(OUT_DIR / f"{prefix}__{movie}.paths")
+        print(len(paths))
+
+        make_single_comparison_plot(
+            paths=paths,
+            hand_counted=hc,
+            speed_thresholds=[1, 5, 10],
+            out=OUT_DIR / f"{prefix}__{movie}__comparison.png",
+        )
 
     make_tiled_comparison_plot(
         paths_by_movie,
@@ -454,57 +514,3 @@ if __name__ == "__main__":
         speed_thresholds=[0.1, 0.5, 1, 5],
     )
 
-    # for movie, hc in hand_by_movie.items():
-    #     print(movie)
-    #
-    #     paths = load_paths(OUT_DIR / f"{prefix}__{movie}.paths")
-    #     print(len(paths))
-    #
-    #     make_single_comparison_plot(
-    #         paths=paths,
-    #         hand_counted=hc,
-    #         speed_thresholds=[1, 5, 10],
-    #         out=OUT_DIR / f"{prefix}__{movie}__comparison.png",
-    #     )
-
-    # def do(movie, reported_count):
-    #     points = load_objects(THIS_DIR / "out" / "paths" / f"{movie}__objects.csv")
-    #
-    #     points_by_frame = group_points_by_frame(points)
-    #     g = make_graph_from_points(points_by_frame, max_distance=50)
-    #
-    #     # the largest connected component of the graph should be the main dish
-    #     # because the graph is directed, we want "weak connection", which is equivalent to normal connection for undirected graphs
-    #     g = max((g.subgraph(c) for c in nx.weakly_connected_components(g)), key=len)
-    #
-    #     last_frame_index = max(points_by_frame.keys())
-    #
-    #     starts = [n for n in g.nodes if n.frame == 0]
-    #     ends = [n for n in g.nodes if n.frame == last_frame_index]
-    #
-    #     path_file = OUT_DIR / f"{prefix}__{movie}.paths"
-    #     if path_file.exists():
-    #         paths = load_paths(path_file)
-    #     else:
-    #         paths = find_paths_increasing_weights_by_fixed_quantity(
-    #             g, starts, ends, quantity=10
-    #         )
-    #         save_paths(path_file, paths)
-    #
-    #     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    #
-    #     make_span_plot(
-    #         OUT_DIR / f"{prefix}__{movie}__span.png",
-    #         points_by_frame,
-    #         paths,
-    #         reported=reported_count,
-    #     )
-    #
-    #     frames = fish.read(DATA_DIR / f"{movie}.hsv")[100:]
-    #     make_movie(OUT_DIR / f"{prefix}__{movie}__test.mp4", frames, paths)
-    #
-    # for movie, reported_count in zip(movies, reported_counts):
-    #     do(movie, reported_count)
-
-    # with Pool(processes=os.cpu_count() - 1) as p:
-    #     p.starmap(do, zip(movies, reported_counts))

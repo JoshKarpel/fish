@@ -5,11 +5,7 @@ import itertools
 import csv
 
 import numpy as np
-import scipy as sp
-import scipy.signal as sig
 import cv2 as cv
-
-import matplotlib.pyplot as plt
 
 from tqdm import tqdm, trange
 
@@ -98,8 +94,8 @@ if __name__ == "__main__":
     DATA = HERE.parent / "data"
     OUT = HERE / "out" / Path(__file__).stem
 
-    # movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
-    movies = [f"D1-1"]
+    movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
+    # movies = [f"D1-1"]
     lowers = [25]
     uppers = [200]
     smoothings = [3]
