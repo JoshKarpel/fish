@@ -111,9 +111,9 @@ if __name__ == "__main__":
     output_frames = track_objects(
         input_frames,
         tracker=tracker,
-        edge_options={"lower_threshold": 25, "upper_threshold": 200, "smoothing": 3,},
+        edge_options={"lower_threshold": 25, "upper_threshold": 200, "smoothing": 3},
     )
 
     op = fish.make_movie(
-        OUT / f"tracked.mp4", frames=output_frames, num_frames=len(input_frames), fps=1,
+        OUT / f"tracked.mp4", frames=output_frames, num_frames=len(input_frames), fps=1
     )

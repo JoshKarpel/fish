@@ -42,9 +42,7 @@ def make_object_count_by_frame_comparison_plot(detections, expected, out):
 
     avg = np.mean(counts, axis=1)
 
-    ax.plot(
-        counts, color="C0", alpha=0.01,
-    )
+    ax.plot(counts, color="C0", alpha=0.01)
     ax.plot(avg, color="black")
     ax.axhline(expected, color="C1", linestyle="--")
 

@@ -1,4 +1,4 @@
-from typing import Optional, List, Iterable, Tuple, Dict
+from typing import List, Dict
 import logging
 
 import dataclasses
@@ -82,10 +82,6 @@ def detect_objects(edges: np.ndarray, area_cutoff: float):
     objects = [c for c in objects if c.area > area_cutoff]
 
     return objects
-
-
-def distance_between(a: np.ndarray, b: np.ndarray) -> float:
-    return np.linalg.norm(a - b)
 
 
 BLUE = (255, 0, 0)
@@ -186,13 +182,13 @@ class ObjectTracker:
 
             try:
                 closest = min(
-                    objects, key=lambda c: distance_between(c.centroid, new_object),
+                    objects, key=lambda c: utils.distance_between(c.centroid, new_object)
                 )
             except ValueError:
                 # min of an empty sequence
                 continue
 
-            if distance_between(closest.centroid, new_object) > self.snap_to:
+            if utils.distance_between(closest.centroid, new_object) > self.snap_to:
                 continue
 
             # print(f"assigning {closest} to {track}")
@@ -230,7 +226,7 @@ class ObjectTracker:
             try:
                 closest_multitrack = min(
                     (t for t in self.live_tracks().values() if t.multiplicity > 1),
-                    key=lambda c: distance_between(
+                    key=lambda c: utils.distance_between(
                         track.objects[-1].centroid, new_object.centroid
                     ),
                 )
@@ -239,7 +235,7 @@ class ObjectTracker:
                 continue
 
             # print("split is from", closest_multitrack)
-            d = distance_between(
+            d = utils.distance_between(
                 closest_multitrack.objects[-1].centroid, new_object.centroid
             )
             # print("d", d)
@@ -262,7 +258,7 @@ class ObjectTracker:
 
 
 def total_dist(points):
-    return sum(distance_between(a, b) for a, b in utils.window(points, 2))
+    return sum(utils.distance_between(a, b) for a, b in utils.window(points, 2))
 
 
 def draw_bounding_rectangles(

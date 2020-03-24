@@ -288,7 +288,7 @@ def make_span_plot(out, points_by_frame, paths, reported=None):
 
 
 def save_paths(out, paths):
-    out.parent.mkdir(parents = True, exist_ok = True)
+    out.parent.mkdir(parents=True, exist_ok=True)
     with out.open(mode="wb") as f:
         pickle.dump(paths, f)
 
@@ -382,7 +382,7 @@ def make_tiled_comparison_plot(paths, hand_counted, out, speed_thresholds=None, 
 
 
 def comparison_plot_on_axis(
-    ax, paths, hand_counted, speed_thresholds, title="", fps=10, labels=True,
+    ax, paths, hand_counted, speed_thresholds, title="", fps=10, labels=True
 ):
     ax.axhline(
         hand_counted.total,
@@ -439,7 +439,7 @@ if __name__ == "__main__":
     DATA_DIR = ROOT_DIR / "data"
     OUT_DIR = THIS_DIR / "out" / Path(__file__).stem
 
-    OUT_DIR.mkdir(parents = True, exist_ok = True)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     prefix = "plus_10"
 
@@ -449,7 +449,9 @@ if __name__ == "__main__":
     reported_counts = [hand_by_movie[movie].total for movie in movies]
 
     def do(movie, reported_count):
-        points = load_objects(THIS_DIR / "out" / "object_detection" / f"{movie}__objects.csv")
+        points = load_objects(
+            THIS_DIR / "out" / "object_detection" / f"{movie}__objects.csv"
+        )
 
         points_by_frame = group_points_by_frame(points)
         g = make_graph_from_points(points_by_frame, max_distance=50)
@@ -513,4 +515,3 @@ if __name__ == "__main__":
         OUT_DIR / f"{prefix}__tiled__comparison.png",
         speed_thresholds=[0.1, 0.5, 1, 5],
     )
-

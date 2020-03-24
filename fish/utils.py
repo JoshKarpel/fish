@@ -2,6 +2,8 @@ import datetime
 import time
 import itertools
 
+import numpy as np
+
 
 class BlockTimer:
     """A context manager that times the code in the ``with`` block. Print the :class:`BlockTimer` after exiting the block to see the results."""
@@ -63,3 +65,7 @@ def window(seq, n):
     for elem in it:
         result = result[1:] + (elem,)
         yield result
+
+
+def distance_between(a: np.ndarray, b: np.ndarray) -> float:
+    return np.linalg.norm(a - b)
