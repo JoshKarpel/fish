@@ -182,7 +182,8 @@ class ObjectTracker:
 
             try:
                 closest = min(
-                    objects, key=lambda c: utils.distance_between(c.centroid, new_object)
+                    objects,
+                    key=lambda c: utils.distance_between(c.centroid, new_object),
                 )
             except ValueError:
                 # min of an empty sequence
