@@ -14,13 +14,12 @@ def train_background_subtractor(frames, iterations=10, seed=1):
 
     shuffled = frames.copy()
 
-    for iteration in trange(iterations, desc="Training background model"):
+    for iteration in range(iterations):
         rnd.shuffle(shuffled)
 
         for frame in tqdm(
             shuffled,
             desc=f"Training background model (iteration {iteration + 1})",
-            leave=False,
         ):
             backsub.apply(frame)
 
