@@ -18,8 +18,7 @@ def train_background_subtractor(frames, iterations=10, seed=1):
         rnd.shuffle(shuffled)
 
         for frame in tqdm(
-            shuffled,
-            desc=f"Training background model (iteration {iteration + 1})",
+            shuffled, desc=f"Training background model (iteration {iteration + 1})"
         ):
             backsub.apply(frame)
 

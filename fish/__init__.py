@@ -10,3 +10,4 @@ from .vectorize import *
 from .edges import *
 from .utils import *
 from .dish import *
+from .figs import *

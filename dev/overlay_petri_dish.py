@@ -43,4 +43,6 @@ if __name__ == "__main__":
     for movie in movies:
         input_frames = fish.read((DATA / f"{movie}.hsv"))[100:]
 
-        overlay_petri(input_frames, OUT / f"{movie}__dish.png", background_training_iterations=1)
+        overlay_petri(
+            input_frames, OUT / f"{movie}__dish.png", background_training_iterations=1
+        )
