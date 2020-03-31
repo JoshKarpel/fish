@@ -41,7 +41,7 @@ def read(path: Path):
 
 def save(path: os.PathLike, array):
     path = Path(path)
-    tmp_path = path.with_suffix(".working")
+    tmp_path = path.with_suffix(path.suffix + ".working")
     with tmp_path.open(mode="wb") as file:
         np.save(file, array)
 
@@ -53,6 +53,17 @@ def save(path: os.PathLike, array):
 def load(path: os.PathLike):
     with Path(path).open(mode="rb") as file:
         return np.load(file)
+
+
+def cached_read(path):
+    cached_path = path.with_suffix(path.suffix + ".cached")
+    if cached_path.exists():
+        return load(cached_path)
+
+    data = read(path)
+    save(cached_path, data)
+
+    return data
 
 
 def display(frames, wait: int = 0):

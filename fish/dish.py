@@ -22,7 +22,7 @@ CIRCLE_CLOSING_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (31, 31))
 
 def clean_frame_for_hough_transform(frame):
     blurred = cv.GaussianBlur(frame, (7, 7), 3)
-    edges = cv.Canny(blurred, 3, 7, L2gradient = True)
+    edges = cv.Canny(blurred, 3, 7, L2gradient=True)
     filtered = remove_components_below_cutoff_area(edges, 100)
     closed = cv.morphologyEx(filtered, cv.MORPH_CLOSE, CIRCLE_CLOSING_KERNEL)
 
@@ -33,12 +33,12 @@ def find_circles_via_hough_transform(cleaned_frame):
     circles = cv.HoughCircles(
         cleaned_frame,
         cv.HOUGH_GRADIENT,
-        dp = 1,
-        minDist = 100,
-        param1 = 150,
-        param2 = 35,
-        minRadius = 250,
-        maxRadius = 0,
+        dp=1,
+        minDist=100,
+        param1=150,
+        param2=35,
+        minRadius=250,
+        maxRadius=0,
     )[0]
 
     return [Circle(*map(int, circle)) for circle in circles]

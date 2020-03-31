@@ -268,7 +268,9 @@ def draw_bounding_rectangles(
     ]
     boxes = [cv.boxPoints(c.bounding_rectangle).astype(np.int0) for c in contours]
 
-    cv.drawContours(frame, boxes, -1, color= colors.GREEN, thickness=1, lineType=cv.LINE_AA)
+    cv.drawContours(
+        frame, boxes, -1, color=colors.GREEN, thickness=1, lineType=cv.LINE_AA
+    )
 
     for c in contours:
         x, y = c.centroid_ints
@@ -277,7 +279,7 @@ def draw_bounding_rectangles(
                 frame,
                 (x - 1, y - 1),
                 (x + 1, y + 1),
-                color= colors.BLUE,
+                color=colors.BLUE,
                 thickness=-1,
                 lineType=cv.LINE_AA,
             )
@@ -288,7 +290,7 @@ def draw_bounding_rectangles(
                 (x + 15, y - 15),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=1,
-                color= colors.BLUE,
+                color=colors.BLUE,
                 thickness=1,
                 lineType=cv.LINE_AA,
             )
@@ -299,7 +301,7 @@ def draw_bounding_rectangles(
                 (x - 15, y - 15),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=1,
-                color= colors.GREEN,
+                color=colors.GREEN,
                 thickness=1,
                 lineType=cv.LINE_AA,
             )
@@ -324,7 +326,7 @@ def draw_object_tracks(
         frame,
         list(object_id_to_track.values()),
         isClosed=False,
-        color= colors.YELLOW,
+        color=colors.YELLOW,
         thickness=1,
         lineType=cv.LINE_AA,
     )
@@ -337,7 +339,7 @@ def draw_object_tracks(
                 (curve[-1, 0] + 15, curve[-1, 1] + 15),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=0.3,
-                color= colors.YELLOW,
+                color=colors.YELLOW,
                 thickness=1,
                 lineType=cv.LINE_AA,
             )
