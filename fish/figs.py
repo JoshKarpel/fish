@@ -6,7 +6,7 @@ import cv2 as cv
 def show_frame(frame):
     plt.close()
 
-    fig = plt.Figure(figsize=(8, 8), dpi=300)
+    fig = plt.Figure(figsize=(6, 6), dpi=300)
     ax = fig.add_subplot(111)
 
     kwargs = {}

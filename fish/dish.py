@@ -1,4 +1,5 @@
 import dataclasses
+import itertools
 
 import cv2 as cv
 import numpy as np
@@ -8,6 +9,22 @@ from tqdm import tqdm
 from . import utils, colors
 
 
+CIRCLE_CLOSING_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (31, 31))
+
+
+def clean_frame_for_hough_transform(frame):
+    blurred = cv.GaussianBlur(frame, (7, 7), 3)
+    edges = cv.Canny(blurred, 3, 7, L2gradient=True)
+
+    # remove small edges
+    filtered = remove_components_below_cutoff_area(edges, 100)
+
+    # close the filtered edges with a big kernel to form big chunky shapes
+    closed = cv.morphologyEx(filtered, cv.MORPH_CLOSE, CIRCLE_CLOSING_KERNEL)
+
+    return closed
+
+
 def remove_components_below_cutoff_area(frame, cutoff):
     modified = frame.copy()
     num_labels, labels, stats, _ = cv.connectedComponentsWithStats(frame, 4)
@@ -15,18 +32,6 @@ def remove_components_below_cutoff_area(frame, cutoff):
         if stats[label, cv.CC_STAT_AREA] < cutoff:
             modified[labels == label] = 0
     return modified
-
-
-CIRCLE_CLOSING_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (31, 31))
-
-
-def clean_frame_for_hough_transform(frame):
-    blurred = cv.GaussianBlur(frame, (7, 7), 3)
-    edges = cv.Canny(blurred, 3, 7, L2gradient=True)
-    filtered = remove_components_below_cutoff_area(edges, 100)
-    closed = cv.morphologyEx(filtered, cv.MORPH_CLOSE, CIRCLE_CLOSING_KERNEL)
-
-    return closed
 
 
 def find_circles_via_hough_transform(cleaned_frame):
@@ -63,34 +68,37 @@ class Circle:
     r: int
 
 
-def label_circles(frame, circles):
+def draw_circles(frame, circles, mark_centers=False, label=False):
     img = colors.bw_to_bgr(frame)
 
-    for idx, (circle, color) in enumerate(zip(circles, colors.BGR_COLOR_CYCLE)):
-        # edge
+    for idx, (circle, color) in enumerate(
+        zip(circles, itertools.cycle(colors.BGR_COLORS))
+    ):
         img = cv.circle(img, (circle.x, circle.y), circle.r, color, 2)
-        img = cv.putText(
-            img,
-            str(idx),
-            (circle.x + circle.r, circle.y),
-            cv.FONT_HERSHEY_SIMPLEX,
-            1,
-            color,
-            1,
-            cv.LINE_AA,
-        )
 
-        # center
-        img = cv.circle(img, (circle.x, circle.y), 2, color, 2)
-        img = cv.putText(
-            img,
-            str(idx),
-            (circle.x + 10, circle.y),
-            cv.FONT_HERSHEY_SIMPLEX,
-            1,
-            color,
-            1,
-            cv.LINE_AA,
-        )
+        if mark_centers:
+            img = cv.circle(img, (circle.x, circle.y), 2, color, 2)
+
+        if label:
+            img = cv.putText(
+                img,
+                str(idx),
+                (circle.x + circle.r, circle.y),
+                cv.FONT_HERSHEY_SIMPLEX,
+                1,
+                color,
+                1,
+                cv.LINE_AA,
+            )
+            img = cv.putText(
+                img,
+                str(idx),
+                (circle.x + 10, circle.y),
+                cv.FONT_HERSHEY_SIMPLEX,
+                1,
+                color,
+                1,
+                cv.LINE_AA,
+            )
 
     return img

@@ -12,9 +12,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-# opencv color order is BGR
-
-
 def read(path: Path):
     path = Path(path)
     if not path.exists():

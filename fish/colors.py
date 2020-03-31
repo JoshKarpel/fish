@@ -1,9 +1,5 @@
-import itertools
-
 import numpy as np
 import cv2 as cv
-
-from . import utils
 
 
 def html_to_rgb(html):
@@ -27,18 +23,17 @@ def fractions(x, y, z):
 
 
 HTML_COLORS = [
-    "#1b9e77",
-    "#d95f02",
-    "#7570b3",
-    "#e7298a",
-    "#66a61e",
-    "#e6ab02",
-    "#a6761d",
+    "#e41a1c",
+    "#377eb8",
+    "#4daf4a",
+    "#984ea3",
+    "#ff7f00",
+    "#ffff33",
+    "#a65628",
+    "#f781bf",
 ]
 RGB_COLORS = [html_to_rgb(c) for c in HTML_COLORS]
-RGB_COLOR_CYCLE = itertools.cycle(RGB_COLORS)
 BGR_COLORS = [rgb_to_bgr(rgb) for rgb in RGB_COLORS]
-BGR_COLOR_CYCLE = itertools.cycle(BGR_COLORS)
 
 BGR_FRACTIONS = [fractions(*bgr) for bgr in BGR_COLORS]
 

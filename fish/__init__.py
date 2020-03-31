@@ -29,7 +29,7 @@ from .dish import (
     remove_components_below_cutoff_area,
     find_circles_via_hough_transform,
     decide_dish,
-    label_circles,
+    draw_circles,
     CIRCLE_CLOSING_KERNEL,
 )
 from .colors import (
