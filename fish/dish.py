@@ -9,25 +9,37 @@ from tqdm import tqdm
 from . import utils, colors
 
 
-CIRCLE_CLOSING_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (31, 31))
+def find_dish(frame):
+    cleaned = clean_frame_for_hough_transform(frame)
+    circles = find_circles_via_hough_transform(cleaned)
+    dish = decide_dish(circles)
+
+    return dish
+
+KERNEL_SIZE = 31
+CIRCLE_CLOSING_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (KERNEL_SIZE, KERNEL_SIZE))
+CANNY_KWARGS = dict(threshold1=1, threshold2=64, apertureSize=3, L2gradient=True)
+AREA_CUTOFF = 300
 
 
 def clean_frame_for_hough_transform(frame):
-    blurred = cv.GaussianBlur(frame, (7, 7), 3)
-    edges = cv.Canny(blurred, 3, 7, L2gradient=True)
-
-    # remove small edges
-    filtered = remove_components_below_cutoff_area(edges, 100)
+    edges = cv.Canny(frame, **CANNY_KWARGS)
 
     # close the filtered edges with a big kernel to form big chunky shapes
-    closed = cv.morphologyEx(filtered, cv.MORPH_CLOSE, CIRCLE_CLOSING_KERNEL)
+    closed = cv.morphologyEx(edges, cv.MORPH_CLOSE, CIRCLE_CLOSING_KERNEL)
 
-    return closed
+    # remove small blobs
+    filtered = remove_components_below_cutoff_area(closed, AREA_CUTOFF)
+
+    return filtered
+
+
+CONNECTIVITY = 8
 
 
 def remove_components_below_cutoff_area(frame, cutoff):
     modified = frame.copy()
-    num_labels, labels, stats, _ = cv.connectedComponentsWithStats(frame, 4)
+    num_labels, labels, stats, _ = cv.connectedComponentsWithStats(frame, CONNECTIVITY)
     for label in range(num_labels):
         if stats[label, cv.CC_STAT_AREA] < cutoff:
             modified[labels == label] = 0
@@ -39,11 +51,11 @@ def find_circles_via_hough_transform(cleaned_frame):
         cleaned_frame,
         cv.HOUGH_GRADIENT,
         dp=1,
-        minDist=100,
-        param1=150,
-        param2=35,
-        minRadius=250,
-        maxRadius=0,
+        minDist=1,
+        param1=128,
+        param2=10,
+        minRadius=350,
+        maxRadius=450,
     )[0]
 
     return [Circle(*map(int, circle)) for circle in circles]
@@ -66,6 +78,18 @@ class Circle:
     x: int
     y: int
     r: int
+
+    def mask_like(self, array):
+        mask = np.zeros_like(array, dtype = np.uint8)
+        mask = cv.circle(
+            mask, (self.x, self.y), self.r, 1, thickness = -1
+        )
+        
+        return mask
+    
+    @property
+    def area(self):
+        return np.pi * (self.r ** 2)
 
 
 def draw_circles(frame, circles, mark_centers=False, label=False):

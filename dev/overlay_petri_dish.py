@@ -18,19 +18,15 @@ import fish
 logging.basicConfig()
 
 
-def overlay_petri(frames, path, background_training_iterations=5):
-    backsub = fish.train_background_subtractor(
-        frames, iterations=background_training_iterations
-    )
+def overlay_petri(frames, path):
+    bgnd = fish.background_via_min(frames)
 
-    cleaned_frame = fish.clean_frame_for_hough_transform(backsub.getBackgroundImage())
-    circles = fish.find_circles_via_hough_transform(cleaned_frame)
-    dish = fish.decide_dish(circles)
+    dish = fish.find_dish(bgnd)
 
     # produce the movie frame that we'll actually write out to disk
-    img = cv.cvtColor(frames[0], cv.COLOR_GRAY2BGR)
+    img = fish.bw_to_bgr(frames[0])
 
-    img = cv.circle(img, (dish.x, dish.y), dish.r, color=fish.RED, thickness=1)
+    img = cv.circle(img, (dish.x, dish.y), dish.r, color = fish.RED, thickness = 1)
 
     fish.save_frame(path, img)
 
@@ -43,8 +39,8 @@ if __name__ == "__main__":
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
 
     for movie in movies:
-        input_frames = fish.read((DATA / f"{movie}.hsv"))[100:]
+        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))[100:]
 
         overlay_petri(
-            input_frames, OUT / f"{movie}__dish.png", background_training_iterations=1
+            input_frames, OUT / f"{movie}__dish.png"
         )

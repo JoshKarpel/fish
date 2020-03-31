@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def read(path: Path):
+def read(path: Path, slice_ = None):
+    if slice_ is None:
+        slice_ = slice(None, None, None)
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"No file at {path}")
@@ -23,11 +25,13 @@ def read(path: Path):
     height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
     width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
 
+    frame_indexes = list(range(num_frames))[slice_]
+
     # each frame is an rgb image
     # BUT R == G == B, because its grayscale
     # so we can lose the RGB dimension
-    frames = np.empty((num_frames, height, width), dtype=np.uint8)
-    for current_frame in tqdm(range(num_frames), desc=f"Reading frames from {path}"):
+    frames = np.empty((len(frame_indexes), height, width), dtype = np.uint8)
+    for current_frame in tqdm(frame_indexes, desc = f"Reading frames from {path}"):
         _, frame = cap.read()
         frames[current_frame] = frame[:, :, 0]  # grab first channel
 
@@ -39,7 +43,7 @@ def read(path: Path):
 def save(path: os.PathLike, array):
     path = Path(path)
     tmp_path = path.with_suffix(path.suffix + ".working")
-    with tmp_path.open(mode="wb") as file:
+    with tmp_path.open(mode = "wb") as file:
         np.save(file, array)
 
     tmp_path.rename(path)
@@ -48,7 +52,7 @@ def save(path: os.PathLike, array):
 
 
 def load(path: os.PathLike):
-    with Path(path).open(mode="rb") as file:
+    with Path(path).open(mode = "rb") as file:
         return np.load(file)
 
 
@@ -77,19 +81,19 @@ def display(frames, wait: int = 0):
             break
 
 
-def make_movie(path, frames, num_frames: Optional[int] = None, fps=30):
-    path.parent.mkdir(parents=True, exist_ok=True)
+def make_movie(path, frames, num_frames: Optional[int] = None, fps = 30):
+    path.parent.mkdir(parents = True, exist_ok = True)
 
     tmp_path = path.with_suffix(".working" + path.suffix)
 
     writer = None
-    for frame in tqdm(frames, total=num_frames, desc=f"Writing frames to {path}"):
+    for frame in tqdm(frames, total = num_frames, desc = f"Writing frames to {path}"):
         if writer is None:
             height, width = frame.shape[:2]
             color = len(frame.shape) == 3
             fourcc = cv.VideoWriter_fourcc(*"mp4v")  # make sure to use lower case
             writer = cv.VideoWriter(
-                str(tmp_path), fourcc, float(fps), (width, height), isColor=color
+                str(tmp_path), fourcc, float(fps), (width, height), isColor = color
             )
 
         writer.write(frame)
@@ -103,3 +107,11 @@ def make_movie(path, frames, num_frames: Optional[int] = None, fps=30):
     tmp_path.rename(path)
 
     return path
+
+
+def int_to_float(array):
+    return array.astype(np.float64) / 255
+
+
+def float_to_int(array):
+    return array.astype(np.uint8) * 8

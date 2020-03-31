@@ -1,6 +1,11 @@
+import logging
+
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2 as cv
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def show_frame(frame):
@@ -24,3 +29,4 @@ def show_frame(frame):
 
 def save_frame(path, frame):
     cv.imwrite(str(path), frame)
+    logger.debug(f"Wrote image to {str(path)}")
