@@ -20,7 +20,8 @@ logging.basicConfig()
 
 def draw_dish(frames):
     backsub = fish.train_background_subtractor(frames, iterations=1)
-    circles = fish.find_circles(backsub.getBackgroundImage())
+    cleaned_frame = fish.clean_frame_for_hough_transform(backsub.getBackgroundImage())
+    circles = fish.find_circles_via_hough_transform(cleaned_frame)
     dish = fish.decide_dish(circles)
 
     for frame_idx, frame in enumerate(frames):

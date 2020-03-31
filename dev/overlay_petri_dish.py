@@ -23,7 +23,9 @@ def overlay_petri(frames, path, background_training_iterations=5):
         frames, iterations=background_training_iterations
     )
 
-    dish = fish.decide_dish(fish.find_circles(backsub.getBackgroundImage()))
+    cleaned_frame = fish.clean_frame_for_hough_transform(backsub.getBackgroundImage())
+    circles = fish.find_circles_via_hough_transform(cleaned_frame)
+    dish = fish.decide_dish(circles)
 
     # produce the movie frame that we'll actually write out to disk
     img = cv.cvtColor(frames[0], cv.COLOR_GRAY2BGR)

@@ -23,7 +23,10 @@ def clean(frames, background_training_iterations=5, dish_radius_buffer=10):
         frames, iterations=background_training_iterations
     )
 
-    dish = fish.decide_dish(fish.find_circles(backsub.getBackgroundImage()))
+    cleaned_frame = fish.clean_frame_for_hough_transform(backsub.getBackgroundImage())
+    circles = fish.find_circles_via_hough_transform(cleaned_frame)
+    dish = fish.decide_dish(circles)
+
     dish_mask = np.zeros_like(backsub.getBackgroundImage(), np.uint8)
     dish_mask = cv.circle(
         dish_mask, (dish.x, dish.y), dish.r + dish_radius_buffer, 1, thickness=-1

@@ -8,7 +8,7 @@ import collections
 import numpy as np
 import cv2 as cv
 
-from . import utils
+from . import utils, colors
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -82,12 +82,6 @@ def detect_objects(edges: np.ndarray, area_cutoff: float):
     objects = [c for c in objects if c.area > area_cutoff]
 
     return objects
-
-
-BLUE = (255, 0, 0)
-GREEN = (0, 255, 0)
-RED = (0, 0, 255)
-YELLOW = (0, 255, 255)
 
 
 @dataclasses.dataclass
@@ -274,7 +268,7 @@ def draw_bounding_rectangles(
     ]
     boxes = [cv.boxPoints(c.bounding_rectangle).astype(np.int0) for c in contours]
 
-    cv.drawContours(frame, boxes, -1, color=GREEN, thickness=1, lineType=cv.LINE_AA)
+    cv.drawContours(frame, boxes, -1, color= colors.GREEN, thickness=1, lineType=cv.LINE_AA)
 
     for c in contours:
         x, y = c.centroid_ints
@@ -283,7 +277,7 @@ def draw_bounding_rectangles(
                 frame,
                 (x - 1, y - 1),
                 (x + 1, y + 1),
-                color=BLUE,
+                color= colors.BLUE,
                 thickness=-1,
                 lineType=cv.LINE_AA,
             )
@@ -294,7 +288,7 @@ def draw_bounding_rectangles(
                 (x + 15, y - 15),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=1,
-                color=BLUE,
+                color= colors.BLUE,
                 thickness=1,
                 lineType=cv.LINE_AA,
             )
@@ -305,7 +299,7 @@ def draw_bounding_rectangles(
                 (x - 15, y - 15),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=1,
-                color=GREEN,
+                color= colors.GREEN,
                 thickness=1,
                 lineType=cv.LINE_AA,
             )
@@ -330,7 +324,7 @@ def draw_object_tracks(
         frame,
         list(object_id_to_track.values()),
         isClosed=False,
-        color=YELLOW,
+        color= colors.YELLOW,
         thickness=1,
         lineType=cv.LINE_AA,
     )
@@ -343,7 +337,7 @@ def draw_object_tracks(
                 (curve[-1, 0] + 15, curve[-1, 1] + 15),
                 fontFace=cv.FONT_HERSHEY_DUPLEX,
                 fontScale=0.3,
-                color=YELLOW,
+                color= colors.YELLOW,
                 thickness=1,
                 lineType=cv.LINE_AA,
             )

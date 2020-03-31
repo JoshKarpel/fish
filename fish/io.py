@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 import cv2 as cv
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
