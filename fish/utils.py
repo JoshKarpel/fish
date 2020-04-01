@@ -73,4 +73,3 @@ def distance_between(a: np.ndarray, b: np.ndarray) -> float:
 
 def moving_average(arr, width):
     return np.convolve(arr, np.ones(width), "valid") / width
-

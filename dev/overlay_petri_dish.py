@@ -26,7 +26,7 @@ def overlay_petri(frames, path):
     # produce the movie frame that we'll actually write out to disk
     img = fish.bw_to_bgr(frames[0])
 
-    img = cv.circle(img, (dish.x, dish.y), dish.r, color = fish.RED, thickness = 1)
+    img = cv.circle(img, (dish.x, dish.y), dish.r, color=fish.RED, thickness=1)
 
     fish.save_frame(path, img)
 
@@ -41,6 +41,4 @@ if __name__ == "__main__":
     for movie in movies:
         input_frames = fish.cached_read((DATA / f"{movie}.hsv"))[100:]
 
-        overlay_petri(
-            input_frames, OUT / f"{movie}__dish.png"
-        )
+        overlay_petri(input_frames, OUT / f"{movie}__dish.png")

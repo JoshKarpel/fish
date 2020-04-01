@@ -12,12 +12,15 @@ from . import utils, colors
 def find_dish(frame):
     cleaned = clean_frame_for_hough_transform(frame)
     circles = find_circles_via_hough_transform(cleaned)
-    dish = decide_dish(circles)
+    dish = decide_dish(circles, cleaned[:5])
 
     return dish
 
+
 KERNEL_SIZE = 31
-CIRCLE_CLOSING_KERNEL = cv.getStructuringElement(cv.MORPH_ELLIPSE, (KERNEL_SIZE, KERNEL_SIZE))
+CIRCLE_CLOSING_KERNEL = cv.getStructuringElement(
+    cv.MORPH_ELLIPSE, (KERNEL_SIZE, KERNEL_SIZE)
+)
 CANNY_KWARGS = dict(threshold1=1, threshold2=64, apertureSize=3, L2gradient=True)
 AREA_CUTOFF = 300
 
@@ -61,9 +64,11 @@ def find_circles_via_hough_transform(cleaned_frame):
     return [Circle(*map(int, circle)) for circle in circles]
 
 
-def decide_dish(circles):
-    # trust the Hough transform voting
-    return circles[0]
+def decide_dish(circles, cleaned_frame):
+    return min(circles, key = lambda c: area_ratio(c, cleaned_frame))
+
+    # # trust the Hough transform voting
+    # return circles[0]
 
     # # closest to the center?
     # img_center = np.array(frame_shape)[::-1] // 2
@@ -80,16 +85,20 @@ class Circle:
     r: int
 
     def mask_like(self, array):
-        mask = np.zeros_like(array, dtype = np.uint8)
-        mask = cv.circle(
-            mask, (self.x, self.y), self.r, 1, thickness = -1
-        )
-        
+        mask = np.zeros_like(array, dtype=np.uint8)
+        mask = cv.circle(mask, (self.x, self.y), self.r, 1, thickness=-1)
+
         return mask
-    
+
     @property
     def area(self):
         return np.pi * (self.r ** 2)
+
+
+def area_ratio(circle, frame):
+    mask = circle.mask_like(frame)
+    area = np.sum(cv.bitwise_and(frame, frame, mask=mask)) / 255
+    return area / circle.area
 
 
 def draw_circles(frame, circles, mark_centers=False, label=False):
