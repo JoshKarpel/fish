@@ -12,7 +12,7 @@ from . import utils, colors
 def find_dish(frame):
     cleaned = clean_frame_for_hough_transform(frame)
     circles = find_circles_via_hough_transform(cleaned)
-    dish = decide_dish(circles, cleaned[:5])
+    dish = decide_dish(circles, cleaned)
 
     return dish
 
@@ -22,7 +22,7 @@ CIRCLE_CLOSING_KERNEL = cv.getStructuringElement(
     cv.MORPH_ELLIPSE, (KERNEL_SIZE, KERNEL_SIZE)
 )
 CANNY_KWARGS = dict(threshold1=1, threshold2=64, apertureSize=3, L2gradient=True)
-AREA_CUTOFF = 300
+AREA_CUTOFF = 5000
 
 
 def clean_frame_for_hough_transform(frame):
@@ -65,7 +65,7 @@ def find_circles_via_hough_transform(cleaned_frame):
 
 
 def decide_dish(circles, cleaned_frame):
-    return min(circles, key = lambda c: area_ratio(c, cleaned_frame))
+    return min(circles[:5], key=lambda c: area_ratio(c, cleaned_frame))
 
     # # trust the Hough transform voting
     # return circles[0]
