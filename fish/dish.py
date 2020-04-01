@@ -4,9 +4,7 @@ import itertools
 import cv2 as cv
 import numpy as np
 
-from tqdm import tqdm
-
-from . import utils, colors
+from . import colors, utils
 
 
 def find_dish(frame):
@@ -84,6 +82,9 @@ class Circle:
     y: int
     r: int
 
+    def draw_on(self, array, color=255):
+        return cv.circle(array, (self.x, self.y), self.r, color, thickness=1)
+
     def mask_like(self, array):
         mask = np.zeros_like(array, dtype=np.uint8)
         mask = cv.circle(mask, (self.x, self.y), self.r, 1, thickness=-1)
@@ -96,8 +97,7 @@ class Circle:
 
 
 def area_ratio(circle, frame):
-    mask = circle.mask_like(frame)
-    area = np.sum(cv.bitwise_and(frame, frame, mask=mask)) / 255
+    area = np.sum(utils.apply_mask(frame, circle.mask_like(frame))) / 255
     return area / circle.area
 
 

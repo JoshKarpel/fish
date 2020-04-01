@@ -3,7 +3,7 @@ import os as _os
 # see https://github.com/ContinuumIO/anaconda-issues/issues/905
 _os.environ["FOR_DISABLE_CONSOLE_CTRL_HANDLER"] = "1"
 
-from .io import read, save, load, cached_read
+from .io import read, save, load, cached_read, make_movie
 from .bgnd import (
     train_background_subtractor,
     apply_background_subtraction,
@@ -37,6 +37,7 @@ from .dish import (
     find_dish,
     area_ratio,
 )
+from .pipette import find_last_pipette_frame
 from .colors import (
     bw_to_rgb,
     bw_to_bgr,
@@ -48,4 +49,14 @@ from .colors import (
     BLUE,
 )
 from .figs import show_frame, save_frame
-from .utils import BlockTimer, chunk, window, distance_between, moving_average
+from .utils import (
+    BlockTimer,
+    chunk,
+    window,
+    distance_between,
+    moving_average,
+    domain,
+    iter_indices,
+    iter_domains,
+    apply_mask,
+)

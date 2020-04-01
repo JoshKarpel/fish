@@ -1,7 +1,10 @@
+from typing import Tuple
+
 import datetime
 import time
 import itertools
 
+import cv2 as cv
 import numpy as np
 
 
@@ -71,5 +74,46 @@ def distance_between(a: np.ndarray, b: np.ndarray) -> float:
     return np.linalg.norm(a - b)
 
 
-def moving_average(arr, width):
-    return np.convolve(arr, np.ones(width), "valid") / width
+def moving_average(array, width):
+    return np.convolve(array, np.ones(width), "valid") / width
+
+
+def _shape_to_half_width(width):
+    return (width - 1) // 2
+
+
+def domain(array: np.ndarray, point: Tuple[int, ...], shape: Tuple[int, ...]):
+    """
+    Return a view of the "domain" for the point defined at the indices ``point``.
+
+
+    Parameters
+    ----------
+    array
+    point
+    shape
+
+    Returns
+    -------
+
+    """
+    half_widths = map(_shape_to_half_width, shape)
+    return array[
+        tuple(
+            slice(max(c - h, 0), min(c + h + 1, array.shape[idx]))
+            for idx, (c, h) in enumerate(zip(point, half_widths))
+        )
+    ]
+
+
+def iter_indices(array: np.ndarray):
+    yield from np.ndindex(*array.shape)
+
+
+def iter_domains(array: np.ndarray, half_widths: Tuple[int, ...]):
+    for idxs in iter_indices(array):
+        yield idxs, domain(array, idxs, half_widths)
+
+
+def apply_mask(frame, mask):
+    return cv.bitwise_and(frame, frame, mask=mask)

@@ -35,3 +35,7 @@ def background_via_min(frames):
         bgnd = np.minimum(bgnd, cv.blur(frame, ksize=(5, 5)))
 
     return bgnd
+
+
+def subtract_background(frame, background):
+    return np.where(frame > background, frame - background, 0)
