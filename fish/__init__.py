@@ -38,6 +38,7 @@ from .dish import (
     area_ratio,
 )
 from .pipette import find_last_pipette_frame
+from .flow import optical_flow, average_velocity_per_frame
 from .colors import (
     bw_to_rgb,
     bw_to_bgr,

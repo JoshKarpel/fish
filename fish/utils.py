@@ -116,4 +116,5 @@ def iter_domains(array: np.ndarray, half_widths: Tuple[int, ...]):
 
 
 def apply_mask(frame, mask):
+    mask = np.where(mask != 0, 1, 0).astype(np.uint8)
     return cv.bitwise_and(frame, frame, mask=mask)
