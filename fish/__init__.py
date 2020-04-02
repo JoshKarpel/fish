@@ -8,6 +8,7 @@ from .bgnd import (
     train_background_subtractor,
     apply_background_subtraction,
     background_via_min,
+    subtract_background,
 )
 from .clustering import (
     frame_to_chunks,
@@ -38,7 +39,7 @@ from .dish import (
     area_ratio,
 )
 from .pipette import find_last_pipette_frame
-from .flow import optical_flow, average_velocity_per_frame
+from .flow import optical_flow, average_velocity_per_frame, total_velocity_per_frame
 from .colors import (
     bw_to_rgb,
     bw_to_bgr,
@@ -49,15 +50,15 @@ from .colors import (
     RED,
     BLUE,
 )
-from .figs import show_frame, save_frame
+from .figs import show_frame, save_frame, draw_text, draw_arrow, draw_circle
 from .utils import (
     BlockTimer,
     chunk,
     window,
     distance_between,
     moving_average,
-    domain,
+    domain_indices,
     iter_indices,
-    iter_domains,
+    iter_domain_indices,
     apply_mask,
 )

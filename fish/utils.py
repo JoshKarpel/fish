@@ -82,10 +82,9 @@ def _shape_to_half_width(width):
     return (width - 1) // 2
 
 
-def domain(array: np.ndarray, point: Tuple[int, ...], shape: Tuple[int, ...]):
+def domain_indices(array: np.ndarray, point: Tuple[int, ...], shape: Tuple[int, ...]):
     """
-    Return a view of the "domain" for the point defined at the indices ``point``.
-
+    Return indices for a view of the "domain" for the point defined at the indices ``point``.
 
     Parameters
     ----------
@@ -98,21 +97,19 @@ def domain(array: np.ndarray, point: Tuple[int, ...], shape: Tuple[int, ...]):
 
     """
     half_widths = map(_shape_to_half_width, shape)
-    return array[
-        tuple(
-            slice(max(c - h, 0), min(c + h + 1, array.shape[idx]))
-            for idx, (c, h) in enumerate(zip(point, half_widths))
-        )
-    ]
+    return tuple(
+        slice(max(c - h, 0), min(c + h + 1, array.shape[idx]))
+        for idx, (c, h) in enumerate(zip(point, half_widths))
+    )
 
 
 def iter_indices(array: np.ndarray):
     yield from np.ndindex(*array.shape)
 
 
-def iter_domains(array: np.ndarray, half_widths: Tuple[int, ...]):
+def iter_domain_indices(array: np.ndarray, half_widths: Tuple[int, ...]):
     for idxs in iter_indices(array):
-        yield idxs, domain(array, idxs, half_widths)
+        yield idxs, domain_indices(array, idxs, half_widths)
 
 
 def apply_mask(frame, mask):

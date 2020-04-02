@@ -20,7 +20,7 @@ logging.basicConfig()
 
 def do_it(movie, path):
     frames = fish.cached_read((DATA / f"{movie}.hsv"))
-    flows = np.array(list(fish.average_velocity_per_frame(frames)))
+    flows = np.array(list(fish.total_velocity_per_frame(frames)))
     print(flows)
 
     fig = plt.Figure(figsize=(12, 8), dpi=600)
@@ -29,7 +29,7 @@ def do_it(movie, path):
     ax.plot(flows)
 
     ax.set_xlabel("frame #")
-    ax.set_ylabel("avg velocity")
+    ax.set_ylabel("total velocity")
 
     fig.tight_layout()
 
@@ -46,4 +46,4 @@ if __name__ == "__main__":
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
 
     for movie in movies:
-        do_it(movie, OUT / f"{movie}__avg_velocity.png")
+        do_it(movie, OUT / f"{movie}__total_velocity.png")
