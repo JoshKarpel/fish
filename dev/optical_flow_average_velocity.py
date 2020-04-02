@@ -18,21 +18,24 @@ import fish
 logging.basicConfig()
 
 
-def do_it(frames, path):
+def do_it(movie, path):
+    frames = fish.cached_read((DATA / f"{movie}.hsv"))
     flows = np.array(list(fish.average_velocity_per_frame(frames)))
+    print(flows)
 
-    plt.close()
-
-    fig = plt.Figure(figsize = (6, 4), dpi = 300)
+    fig = plt.Figure(figsize=(12, 8), dpi=600)
     ax = fig.add_subplot(111)
+
     ax.plot(flows)
 
-    ax.set_xlabel('frame #')
-    ax.set_ylabel('avg velocity')
+    ax.set_xlabel("frame #")
+    ax.set_ylabel("avg velocity")
 
     fig.tight_layout()
 
-    plt.savefig(str(path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig.savefig(str(path), bbox_inches="tight")
 
 
 if __name__ == "__main__":
@@ -43,6 +46,4 @@ if __name__ == "__main__":
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
 
     for movie in movies:
-        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))
-
-        do_it(input_frames, OUT / f"{movie}__avg_velocity.png")
+        do_it(movie, OUT / f"{movie}__avg_velocity.png")

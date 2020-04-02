@@ -24,7 +24,7 @@ def show_frame(frame):
 
     fig.tight_layout()
 
-    return fig
+    fig.show()
 
 
 def save_frame(path, frame):
