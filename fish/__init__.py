@@ -50,7 +50,14 @@ from .colors import (
     RED,
     BLUE,
 )
-from .figs import show_frame, save_frame, draw_text, draw_arrow, draw_circle
+from .figs import (
+    show_frame,
+    save_frame,
+    draw_text,
+    draw_arrow,
+    draw_circle,
+    draw_ellipse,
+)
 from .utils import (
     BlockTimer,
     chunk,
