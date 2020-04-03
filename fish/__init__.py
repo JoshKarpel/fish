@@ -49,6 +49,7 @@ from .colors import (
     YELLOW,
     RED,
     BLUE,
+    fractions,
 )
 from .figs import (
     show_frame,
