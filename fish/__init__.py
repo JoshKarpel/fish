@@ -49,6 +49,10 @@ from .colors import (
     YELLOW,
     RED,
     BLUE,
+    WHITE,
+    TEAL,
+    PINK,
+    BLACK,
     fractions,
 )
 from .figs import (
@@ -58,6 +62,7 @@ from .figs import (
     draw_arrow,
     draw_circle,
     draw_ellipse,
+    draw_rectangle,
 )
 from .utils import (
     BlockTimer,

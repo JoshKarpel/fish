@@ -29,14 +29,17 @@ LOW_AREA_BRIGHTNESS = 100
 LOW_AREA_FLOW = 100
 
 
-def do_optical_flow(frames):
+def do_optical_flow(frames, hand_counted_total):
     bgnd = fish.background_via_min(frames)
 
     dish = fish.find_dish(bgnd)
     dish_mask = dish.mask_like(bgnd)
 
+    start_frame = fish.find_last_pipette_frame(frames, background = bgnd, dish = dish)
+
     flow = None
-    for frame_idx, frame in enumerate(frames[1:], start=1):
+    count_total_by_frame = []
+    for frame_idx, frame in enumerate(frames[start_frame:], start=start_frame):
         frame_masked = fish.apply_mask(frame, dish_mask)
         frame_masked_no_bgnd = fish.subtract_background(frame_masked, bgnd)
 
@@ -132,6 +135,25 @@ def do_optical_flow(frames):
                     )
                 )
 
+        # COUNTING
+
+        # flow_dist_transform = cv.distanceTransform(flow_norm_closed, distanceType = cv.DIST_L2, maskSize = 5)
+        # brightness_dist_transform = cv.distanceTransform(frame_closed)
+
+        # if it's moving, it's probably a fish
+        count_moving = len(velocity_blobs)
+        # add brightness blobs that aren't moving
+        # i.e., the centroid of the brightness blob is not inside a velocity blob
+        count_not_moving = len(
+            list(
+                blob
+                for blob in brightness_blobs
+                if flow_norm_closed[int(blob.y), int(blob.x)] == 0
+            )
+        )
+        count_total = count_moving + count_not_moving
+        count_total_by_frame.append(count_total)
+
         # DISPLAY
 
         img = fish.bw_to_bgr(frame)
@@ -144,6 +166,19 @@ def do_optical_flow(frames):
         ).astype(np.uint8)
         shadows = cv.addWeighted(img_flow, 0.5, img_objects, 0.5, 0)
         img = cv.addWeighted(img, 0.6, shadows, 0.4, 0)
+
+        displays = [
+            f"# T HC: {hand_counted_total}",
+            f"# T Br: {len(brightness_blobs)}",
+            f"# T Ve: {len(velocity_blobs)}",
+            f"# T: {count_total}",
+            f"# Tavg: {round(np.mean(count_total_by_frame), 1)}",
+            f"# P: {count_not_moving}",
+        ]
+
+        img = fish.draw_rectangle(img, (0, 0), (270, 400), color = fish.BLACK, thickness = -1)
+        for offset, disp in enumerate(displays):
+            img = fish.draw_text(img, (30, 30 + 35 * offset), disp, color = fish.WHITE)
 
         for blob in brightness_blobs:
             img = fish.draw_text(
@@ -257,9 +292,9 @@ if __name__ == "__main__":
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
 
     for movie in movies[:1]:
-        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))[300:400]
+        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))
 
-        frames = do_optical_flow(input_frames)
+        frames = do_optical_flow(input_frames, hand_counted_total=34)
 
         fish.make_movie(
             OUT / f"{movie}__optical_flow.mp4",
