@@ -36,7 +36,7 @@ def do_optical_flow(frames):
     dish_mask = dish.mask_like(bgnd)
 
     flow = None
-    for frame_idx, frame in enumerate(frames[1:], start = 1):
+    for frame_idx, frame in enumerate(frames[1:], start=1):
         frame_masked = fish.apply_mask(frame, dish_mask)
         frame_masked_no_bgnd = fish.subtract_background(frame_masked, bgnd)
 
@@ -47,7 +47,7 @@ def do_optical_flow(frames):
         # OBJECT CALCULATIONS
 
         frame_thresh, frame_thresholded = cv.threshold(
-            frame_masked_no_bgnd, thresh = 0, maxval = 255, type = cv.THRESH_OTSU
+            frame_masked_no_bgnd, thresh=30, maxval=255, type=cv.THRESH_BINARY
         )
 
         frame_closed = cv.morphologyEx(
@@ -68,7 +68,7 @@ def do_optical_flow(frames):
 
             if area > LOW_AREA_BRIGHTNESS:
                 brightness_blobs.append(
-                    BrightnessBlob(label = label, area = area, centroid = centroid, )
+                    BrightnessBlob(label=label, area=area, centroid=centroid,)
                 )
 
         # FLOW CALCULATIONS
@@ -77,22 +77,22 @@ def do_optical_flow(frames):
             prev_frame_masked_no_bgnd,
             frame_masked_no_bgnd,
             flow,
-            pyr_scale = 0.5,
-            levels = 3,
-            winsize = 11,
-            iterations = 5,
-            poly_n = 5,
-            poly_sigma = 1.1,
-            flags = cv.OPTFLOW_FARNEBACK_GAUSSIAN
+            pyr_scale=0.5,
+            levels=3,
+            winsize=11,
+            iterations=5,
+            poly_n=5,
+            poly_sigma=1.1,
+            flags=cv.OPTFLOW_FARNEBACK_GAUSSIAN
             if flow is None
             else cv.OPTFLOW_USE_INITIAL_FLOW,
         )
 
-        flow_norm = np.linalg.norm(flow, axis = -1)
+        flow_norm = np.linalg.norm(flow, axis=-1)
         flow_norm_image = (flow_norm * 255 / np.max(flow_norm)).astype(np.uint8)
 
         flow_thresh, flow_norm_thresholded = cv.threshold(
-            flow_norm_image, thresh = 0, maxval = 255, type = cv.THRESH_OTSU
+            flow_norm_image, thresh=0, maxval=255, type=cv.THRESH_OTSU
         )
 
         flow_norm_closed = cv.morphologyEx(
@@ -123,10 +123,10 @@ def do_optical_flow(frames):
             if area > LOW_AREA_FLOW:
                 velocity_blobs.append(
                     VelocityBlob(
-                        label = label,
-                        area = area,
-                        centroid = centroid,
-                        centroid_velocity = np.array(
+                        label=label,
+                        area=area,
+                        centroid=centroid,
+                        centroid_velocity=np.array(
                             [flow_x_interp(centroid), flow_y_interp(centroid)]
                         ),
                     )
@@ -147,10 +147,10 @@ def do_optical_flow(frames):
 
         for blob in brightness_blobs:
             img = fish.draw_text(
-                img, (blob.x, blob.y + 30), blob.label, color = fish.GREEN, size = 0.5
+                img, (blob.x, blob.y + 30), blob.label, color=fish.GREEN, size=0.5
             )
             img = fish.draw_circle(
-                img, (blob.x, blob.y), radius = 2, thickness = -1, color = fish.GREEN
+                img, (blob.x, blob.y), radius=2, thickness=-1, color=fish.GREEN
             )
 
         ARROW_SCALE = 7
@@ -158,22 +158,22 @@ def do_optical_flow(frames):
 
         for blob in velocity_blobs:
             img = fish.draw_text(
-                img, (blob.x + 20, blob.y), blob.label, color = fish.RED, size = 0.5,
+                img, (blob.x + 20, blob.y), blob.label, color=fish.RED, size=0.5,
             )
             img = fish.draw_circle(
-                img, (blob.x, blob.y), radius = 2, thickness = -1, color = fish.RED
+                img, (blob.x, blob.y), radius=2, thickness=-1, color=fish.RED
             )
             img = fish.draw_arrow(
                 img,
                 (blob.x, blob.y),
                 (blob.x + blob.v_x * ARROW_SCALE, blob.y + blob.v_y * ARROW_SCALE),
-                color = fish.RED,
+                color=fish.RED,
             )
             img = fish.draw_arrow(
                 img,
                 (blob.x, blob.y),
                 (blob.x + blob.v_t_x * ARROW_SCALE, blob.y + blob.v_t_y * ARROW_SCALE),
-                color = fish.BLUE,
+                color=fish.BLUE,
             )
 
             blow_flow = flow[flow_labels == blob.label]
@@ -190,8 +190,8 @@ def do_optical_flow(frames):
                     img,
                     (blob.x, blob.y),
                     (v_rel_std * ELLIPSE_SCALE, v_t_rel_std * ELLIPSE_SCALE),
-                    rotation = np.rad2deg(np.arctan2(blob.v_y, blob.v_x)),
-                    color = fish.YELLOW,
+                    rotation=np.rad2deg(np.arctan2(blob.v_y, blob.v_x)),
+                    color=fish.YELLOW,
                 )
 
         yield img
@@ -264,6 +264,6 @@ if __name__ == "__main__":
         fish.make_movie(
             OUT / f"{movie}__optical_flow.mp4",
             frames,
-            num_frames = len(input_frames),
-            fps = 1,
+            num_frames=len(input_frames),
+            fps=1,
         )
