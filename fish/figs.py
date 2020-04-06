@@ -70,5 +70,6 @@ def draw_ellipse(frame, center, axes, rotation, color=colors.WHITE, thickness=1)
         thickness=thickness,
     )
 
-def draw_rectangle(frame, corner, opposite, color = colors.WHITE, thickness = 1):
-    return cv.rectangle(frame, corner, opposite, color = color, thickness = thickness)
+
+def draw_rectangle(frame, corner, opposite, color=colors.WHITE, thickness=1):
+    return cv.rectangle(frame, corner, opposite, color=color, thickness=thickness)

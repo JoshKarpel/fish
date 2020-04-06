@@ -29,15 +29,18 @@ LOW_AREA_BRIGHTNESS = 100
 LOW_AREA_FLOW = 100
 
 
-def do_optical_flow(frames, hand_counted_total):
-    bgnd = fish.background_via_min(frames)
+def do_optical_flow(frames, plot_out, hand_counted):
+    start_frame = fish.find_last_pipette_frame(frames)
+    # start_frame = 0
+
+    bgnd = fish.background_via_min(frames[start_frame:])
 
     dish = fish.find_dish(bgnd)
     dish_mask = dish.mask_like(bgnd)
 
-    start_frame = fish.find_last_pipette_frame(frames, background = bgnd, dish = dish)
-
     flow = None
+    count_moving_by_frame = []
+    count_not_moving_by_frame = []
     count_total_by_frame = []
     for frame_idx, frame in enumerate(frames[start_frame:], start=start_frame):
         frame_masked = fish.apply_mask(frame, dish_mask)
@@ -152,6 +155,9 @@ def do_optical_flow(frames, hand_counted_total):
             )
         )
         count_total = count_moving + count_not_moving
+
+        count_moving_by_frame.append(count_moving)
+        count_not_moving_by_frame.append(count_not_moving)
         count_total_by_frame.append(count_total)
 
         # DISPLAY
@@ -168,7 +174,7 @@ def do_optical_flow(frames, hand_counted_total):
         img = cv.addWeighted(img, 0.6, shadows, 0.4, 0)
 
         displays = [
-            f"# T HC: {hand_counted_total}",
+            f"# T HC: {hand_counted.total}",
             f"# T Br: {len(brightness_blobs)}",
             f"# T Ve: {len(velocity_blobs)}",
             f"# T: {count_total}",
@@ -176,9 +182,11 @@ def do_optical_flow(frames, hand_counted_total):
             f"# P: {count_not_moving}",
         ]
 
-        img = fish.draw_rectangle(img, (0, 0), (270, 400), color = fish.BLACK, thickness = -1)
+        img = fish.draw_rectangle(
+            img, (0, 0), (270, 400), color=fish.BLACK, thickness=-1
+        )
         for offset, disp in enumerate(displays):
-            img = fish.draw_text(img, (30, 30 + 35 * offset), disp, color = fish.WHITE)
+            img = fish.draw_text(img, (30, 30 + 35 * offset), disp, color=fish.WHITE)
 
         for blob in brightness_blobs:
             img = fish.draw_text(
@@ -230,6 +238,36 @@ def do_optical_flow(frames, hand_counted_total):
                 )
 
         yield img
+
+    plt.close()
+
+    x = np.arange(start=start_frame, stop=len(frames))
+
+    fig = plt.figure(figsize=(12, 8), dpi=600)
+    ax = fig.add_subplot(111)
+
+    ax.axvline(start_frame, color="pink", linestyle="--")
+
+    ax.axhline(
+        hand_counted.total, label="Hand-Counted Total", color="black", linestyle="--"
+    )
+    # * 10 to convert from time to frames at 10 fps
+    ax.plot(
+        (hand_counted.times * 10) + start_frame,
+        hand_counted.counts,
+        label="Hand-Counted Paralyzed",
+        color="black",
+    )
+
+    ax.plot(x, count_not_moving_by_frame, label="Not Moving")
+    ax.plot(x, count_moving_by_frame, label="Moving")
+    ax.plot(x, count_total_by_frame, label="Moving + Not Moving")
+
+    ax.legend(loc="upper left")
+
+    ax.set_xlim(0, len(frames))
+
+    plt.savefig(str(plot_out))
 
 
 class Blob:
@@ -290,11 +328,18 @@ if __name__ == "__main__":
     OUT = HERE / "out" / Path(__file__).stem
 
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
+    hand_by_movie = {
+        hc.movie: hc for hc in fish.load_hand_counted_data(DATA / "counts.csv")
+    }
 
-    for movie in movies[:1]:
-        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))
+    for movie in movies:
+        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))[:600]
 
-        frames = do_optical_flow(input_frames, hand_counted_total=34)
+        frames = do_optical_flow(
+            input_frames,
+            OUT / f"{movie}__counts.png",
+            hand_counted=hand_by_movie[movie],
+        )
 
         fish.make_movie(
             OUT / f"{movie}__optical_flow.mp4",

@@ -17,7 +17,7 @@ from . import dish as dish_
 
 
 def find_last_pipette_frame(
-    frames, background=None, dish=None, area_cutoff=6000, extra_frames=10
+    frames, background=None, dish=None, area_cutoff=6000, extra_frames=20
 ):
     if background is None:
         background = bgnd.background_via_min(frames)
