@@ -41,6 +41,7 @@ from .dish import (
 from .pipette import find_last_pipette_frame
 from .flow import optical_flow, average_velocity_per_frame, total_velocity_per_frame
 from .hand import HandCounted, load_hand_counted_data
+from .domains import domain, iter_domain_indices, rotate_domain_xy
 from .colors import (
     bw_to_rgb,
     bw_to_bgr,
@@ -71,8 +72,4 @@ from .utils import (
     window,
     distance_between,
     moving_average,
-    domain_indices,
-    iter_indices,
-    iter_domain_indices,
-    apply_mask,
 )

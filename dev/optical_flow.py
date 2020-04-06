@@ -267,6 +267,10 @@ def do_optical_flow(frames, plot_out, hand_counted):
 
     ax.set_xlim(0, len(frames))
 
+    ax.set_xlabel("Frame #")
+    ax.set_ylabel("Count")
+    ax.set_title(plot_out.stem)
+
     plt.savefig(str(plot_out))
 
 
