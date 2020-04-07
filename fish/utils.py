@@ -77,3 +77,7 @@ def distance_between(a: np.ndarray, b: np.ndarray) -> float:
 def moving_average(array, width):
     return np.convolve(array, np.ones(width), "valid") / width
 
+
+def apply_mask(frame, mask):
+    mask = np.where(mask != 0, 1, 0).astype(np.uint8)
+    return cv.bitwise_and(frame, frame, mask=mask)

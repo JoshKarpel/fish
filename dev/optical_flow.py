@@ -6,6 +6,7 @@ import csv
 
 import numpy as np
 import scipy as sp
+import sklearn.decomposition as decomp
 import cv2 as cv
 
 import matplotlib.pyplot as plt
@@ -30,8 +31,8 @@ LOW_AREA_FLOW = 100
 
 
 def do_optical_flow(frames, plot_out, hand_counted):
-    start_frame = fish.find_last_pipette_frame(frames)
-    # start_frame = 0
+    # start_frame = fish.find_last_pipette_frame(frames)
+    start_frame = 0
 
     bgnd = fish.background_via_min(frames[start_frame:])
 
@@ -43,8 +44,11 @@ def do_optical_flow(frames, plot_out, hand_counted):
     count_not_moving_by_frame = []
     count_total_by_frame = []
     for frame_idx, frame in enumerate(frames[start_frame:], start=start_frame):
+        print("frame_index", frame_idx)
         frame_masked = fish.apply_mask(frame, dish_mask)
         frame_masked_no_bgnd = fish.subtract_background(frame_masked, bgnd)
+
+        brightness_interp = fish.interpolate_frame(frame_masked_no_bgnd)
 
         prev_frame = frames[frame_idx - 1]
         prev_frame_masked = fish.apply_mask(prev_frame, dish_mask)
@@ -105,14 +109,10 @@ def do_optical_flow(frames, plot_out, hand_counted):
             flow_norm_thresholded, cv.MORPH_CLOSE, FLOW_CLOSE_KERNEL
         )
 
-        y = np.arange(flow.shape[0])
-        x = np.arange(flow.shape[1])
         flow_x = flow[..., 0]
         flow_y = flow[..., 1]
-
-        # must flip the flow because it's normally in y-x order, but we store coordinates in x-y order
-        flow_x_interp = sp.interpolate.RegularGridInterpolator((x, y), flow_x.T)
-        flow_y_interp = sp.interpolate.RegularGridInterpolator((x, y), flow_y.T)
+        flow_x_interp = fish.interpolate_frame(flow_x)
+        flow_y_interp = fish.interpolate_frame(flow_y)
 
         (
             flow_num_labels,
@@ -127,16 +127,81 @@ def do_optical_flow(frames, plot_out, hand_counted):
             centroid = flow_centroids[label]
 
             if area > LOW_AREA_FLOW:
-                velocity_blobs.append(
-                    VelocityBlob(
-                        label=label,
-                        area=area,
-                        centroid=centroid,
-                        centroid_velocity=np.array(
-                            [flow_x_interp(centroid), flow_y_interp(centroid)]
-                        ),
-                    )
+                v = VelocityBlob(
+                    label=label,
+                    area=area,
+                    centroid=centroid,
+                    centroid_velocity=np.array(
+                        [flow_x_interp(centroid), flow_y_interp(centroid)]
+                    ),
                 )
+                velocity_blobs.append(v)
+
+        # BRIGHTNESS FEATURES
+
+        # brightness_features = []
+        # for blob in brightness_blobs:
+        #     domain_x, domain_y = blob.domain((10, 10))
+
+        # VELOCITY FEATURES
+
+        velocity_feature_vectors = []
+        for blob in velocity_blobs:
+            feature_vector = []
+
+            # brightness
+            domain_x, domain_y = blob.domain(widths=(20, 20), points=(10, 10))
+            domain_brightness = fish.evaluate_interpolation(
+                domain_x, domain_y, brightness_interp
+            )
+            feature_vector += [
+                np.mean(domain_brightness),
+                np.std(domain_brightness),
+            ]
+
+            # relative velocity
+            blob_flow = flow[flow_labels == blob.label]
+
+            v_rel = np.dot(blob_flow, blob.v_unit)
+            v_rel_mean = np.mean(v_rel)
+            v_rel_std = np.std(v_rel)
+
+            v_t_rel = np.dot(blob_flow, blob.v_t_unit)
+            v_t_rel_mean = np.sum(v_t_rel[v_t_rel != 0])
+            v_t_rel_std = np.std(v_t_rel[v_t_rel != 0])
+
+            feature_vector += [v_rel_mean, v_rel_std, v_t_rel_mean, v_t_rel_std]
+
+            domain_flow_x = fish.evaluate_interpolation(
+                domain_x, domain_y, flow_x_interp
+            )
+            domain_flow_y = fish.evaluate_interpolation(
+                domain_x, domain_y, flow_y_interp
+            )
+            domain_flow = np.stack((domain_flow_x, domain_flow_y), axis=-1)
+
+            domain_flow_u = np.dot(domain_flow, blob.v_unit).squeeze()
+            domain_flow_v = np.dot(domain_flow, blob.v_t_unit).squeeze()
+
+            feature_vector.extend(domain_flow_u.ravel())
+            feature_vector.extend(domain_flow_v.ravel())
+
+            # 1st index is "x", 2nd index is "y"
+            domain_flow_grad_u_v, domain_flow_grad_u_u = np.gradient(domain_flow_u)
+            domain_flow_grad_v_v, domain_flow_grad_v_u = np.gradient(domain_flow_v)
+            domain_divergence = domain_flow_grad_u_u + domain_flow_grad_v_v
+            domain_curl = domain_flow_grad_v_u - domain_flow_grad_u_v
+
+            feature_vector.extend(domain_divergence.ravel())
+            feature_vector.extend(domain_curl.ravel())
+
+            velocity_feature_vectors.append(np.array(feature_vector))
+
+        velocity_feature_vectors = np.row_stack(velocity_feature_vectors)
+
+        print("velocity_feature_vectors")
+        print(velocity_feature_vectors.shape)
+        # print(velocity_feature_vectors)
 
         # COUNTING
 
@@ -219,12 +284,12 @@ def do_optical_flow(frames, plot_out, hand_counted):
                 color=fish.BLUE,
             )
 
-            blow_flow = flow[flow_labels == blob.label]
-            v_rel = np.dot(blow_flow, blob.v_unit)
+            blob_flow = flow[flow_labels == blob.label]
+            v_rel = np.dot(blob_flow, blob.v_unit)
             v_rel_mean = np.mean(v_rel)
             v_rel_std = np.std(v_rel)
 
-            v_t_rel = np.dot(blow_flow, blob.v_t_unit)
+            v_t_rel = np.dot(blob_flow, blob.v_t_unit)
             v_t_rel_mean = np.sum(v_t_rel[v_t_rel != 0])
             v_t_rel_std = np.std(v_t_rel[v_t_rel != 0])
 
@@ -233,9 +298,24 @@ def do_optical_flow(frames, plot_out, hand_counted):
                     img,
                     (blob.x, blob.y),
                     (v_rel_std * ELLIPSE_SCALE, v_t_rel_std * ELLIPSE_SCALE),
-                    rotation=np.rad2deg(np.arctan2(blob.v_y, blob.v_x)),
+                    rotation=np.rad2deg(blob.angle),
                     color=fish.YELLOW,
                 )
+
+            # domain_x, domain_y = blob.domain(widths = (20, 10), points = (5, 5))
+            # for y_idx, x_idx in fish.iter_domain_indices(domain_x):
+            #     x = domain_x[y_idx, x_idx]
+            #     y = domain_y[y_idx, x_idx]
+            #     img = fish.draw_circle(
+            #         img, center = (x, y), radius = 3, color = fish.RED, thickness = -1,
+            #     )
+            # img = fish.draw_circle(
+            #     img,
+            #     center = (domain_x[0, 0], domain_y[0, 0]),
+            #     radius = 3,
+            #     color = fish.GREEN,
+            #     thickness = -1,
+            # )
 
         yield img
 
@@ -288,9 +368,17 @@ class Blob:
     def y(self):
         return self.centroid[1]
 
+    def domain(self, widths, points=None):
+        return fish.rotate_domain_xy(
+            *fish.domain(center=self.centroid, widths=widths, points=points),
+            angle=self.angle,
+        )
+
 
 class BrightnessBlob(Blob):
-    pass
+    def __init__(self, label, area, centroid, angle):
+        super().__init__(label, area, centroid)
+        self.angle = angle
 
 
 class VelocityBlob(Blob):
@@ -325,6 +413,11 @@ class VelocityBlob(Blob):
             self.centroid_velocity_tangent
         )
 
+    @property
+    def angle(self):
+        # -v_y because positive v_y points down on the screen
+        return np.arctan2(-self.v_y, self.v_x)
+
 
 if __name__ == "__main__":
     HERE = Path(__file__).absolute().parent
@@ -336,8 +429,8 @@ if __name__ == "__main__":
         hc.movie: hc for hc in fish.load_hand_counted_data(DATA / "counts.csv")
     }
 
-    for movie in movies:
-        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))[:600]
+    for movie in movies[:1]:
+        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))[500:600]
 
         frames = do_optical_flow(
             input_frames,
