@@ -44,7 +44,7 @@ def do_optical_flow(frames, plot_out, hand_counted):
     count_not_moving_by_frame = []
     count_total_by_frame = []
     for frame_idx, frame in enumerate(frames[start_frame:], start=start_frame):
-        print("frame_index", frame_idx)
+        # print("frame_index", frame_idx)
         frame_masked = fish.apply_mask(frame, dish_mask)
         frame_masked_no_bgnd = fish.subtract_background(frame_masked, bgnd)
 
@@ -77,9 +77,20 @@ def do_optical_flow(frames, plot_out, hand_counted):
             centroid = brightness_centroids[label]
 
             if area > LOW_AREA_BRIGHTNESS:
-                brightness_blobs.append(
-                    BrightnessBlob(label=label, area=area, centroid=centroid,)
+                points = np.transpose((label == brightness_labels).nonzero())
+                # print(points.shape)
+
+                pca = decomp.PCA(n_components=2)
+                pca.fit(points)
+                # print(pca.components_)
+
+                y, x = pca.components_[0]
+                angle = np.arctan2(-y, x)
+
+                b = BrightnessBlob(
+                    label=label, area=area, centroid=centroid, angle=angle
                 )
+                brightness_blobs.append(b)
 
         # FLOW CALCULATIONS
 
@@ -199,8 +210,8 @@ def do_optical_flow(frames, plot_out, hand_counted):
 
         velocity_feature_vectors = np.row_stack(velocity_feature_vectors)
 
-        print("velocity_feature_vectors")
-        print(velocity_feature_vectors.shape)
+        # print("velocity_feature_vectors")
+        # print(velocity_feature_vectors.shape)
         # print(velocity_feature_vectors)
 
         # COUNTING
@@ -259,6 +270,21 @@ def do_optical_flow(frames, plot_out, hand_counted):
             )
             img = fish.draw_circle(
                 img, (blob.x, blob.y), radius=2, thickness=-1, color=fish.GREEN
+            )
+
+            domain_x, domain_y = blob.domain(widths=(20, 10), points=(3, 3))
+            for y_idx, x_idx in fish.iter_domain_indices(domain_x):
+                x = domain_x[y_idx, x_idx]
+                y = domain_y[y_idx, x_idx]
+                img = fish.draw_circle(
+                    img, center=(x, y), radius=3, color=fish.RED, thickness=-1,
+                )
+            img = fish.draw_circle(
+                img,
+                center=(domain_x[0, 0], domain_y[0, 0]),
+                radius=3,
+                color=fish.GREEN,
+                thickness=-1,
             )
 
         ARROW_SCALE = 7
