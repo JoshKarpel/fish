@@ -1,5 +1,7 @@
 import logging
 
+import itertools
+
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2 as cv
@@ -10,17 +12,19 @@ logger.setLevel(logging.DEBUG)
 from . import colors
 
 
-def show_frame(frame):
+def show_image(image):
     plt.close()
 
     fig = plt.figure(figsize=(6, 6), dpi=300)
     ax = fig.add_subplot(111)
 
     kwargs = {}
-    if len(frame.shape) == 2:
+    if len(image.shape) == 2:
         kwargs.update(dict(cmap="gray", vmin=0, vmax=255))
+    elif len(image.shape) == 3:
+        image = colors.convert_colorspace(image, cv.COLOR_BGR2RGB)
 
-    ax.imshow(frame, **kwargs)
+    ax.imshow(image, **kwargs)
 
     ax.axis("off")
 
@@ -29,16 +33,49 @@ def show_frame(frame):
     return
 
 
-def save_frame(path, frame):
-    cv.imwrite(str(path), frame)
-    logger.debug(f"Wrote image to {str(path)}")
+def color_labels(image, label_range, labels):
+    show_markers = np.zeros_like(image)
+
+    for idx, (label, color) in enumerate(
+        zip(label_range, itertools.cycle(colors.BGR_COLORS_8))
+    ):
+        show_markers[label == labels] = color
+
+    return show_markers
+
+
+def overlay_image(image_1, image_2, alpha=0.5):
+    return cv.addWeighted(image_1, alpha, image_2, 1 - alpha, 0)
 
 
 def draw_text(
-    frame, position, text, font=cv.FONT_HERSHEY_SIMPLEX, size=1, color=colors.WHITE
+    frame,
+    position,
+    text,
+    font=cv.FONT_HERSHEY_SIMPLEX,
+    size=1,
+    thickness=1,
+    color=colors.WHITE,
 ):
     return cv.putText(
-        frame, str(text), tuple(int(p) for p in position), font, size, color=color
+        frame,
+        str(text),
+        tuple(int(p) for p in position),
+        font,
+        size,
+        color=color,
+        thickness=thickness,
+    )
+
+
+def draw_line(frame, start, end, color=colors.WHITE, thickness=1):
+    return cv.line(
+        frame,
+        tuple(int(p) for p in start),
+        tuple(int(p) for p in end),
+        color,
+        thickness,
+        lineType=cv.LINE_AA,
     )
 
 

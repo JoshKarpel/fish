@@ -452,7 +452,7 @@ if __name__ == "__main__":
 
     movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
     hand_by_movie = {
-        hc.movie: hc for hc in fish.load_hand_counted_data(DATA / "counts.csv")
+        hc.path: hc for hc in fish.load_hand_counted_data(DATA / "counts.csv")
     }
 
     for movie in movies[:1]:
