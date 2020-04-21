@@ -17,8 +17,32 @@ from . import dish as dish_
 
 
 def find_last_pipette_frame(
-    frames, background=None, dish=None, area_cutoff=6000, extra_frames=20
+    frames,
+    background=None,
+    dish=None,
+    area_cutoff_ratio=2,
+    pipette_sector=(0, 90),
+    extra_frames=20,
 ):
+    """
+
+    Parameters
+    ----------
+    frames
+    background
+    dish
+    area_cutoff_ratio
+        Look for areas-touching-the-dish that are at least this many times larger
+        than the average across the entire movie.
+    pipette_sector
+        The angle (in degrees) to look for objects touching the dish in.
+    extra_frames
+        An additional number of frames to delay by.
+
+    Returns
+    -------
+
+    """
     if background is None:
         background = bgnd.background_via_min(frames)
 
@@ -27,14 +51,19 @@ def find_last_pipette_frame(
 
     areas = np.array(
         [
-            _area_touching_dish(bgnd.subtract_background(frame, background), dish)
+            _area_touching_dish(
+                bgnd.subtract_background(frame, background), dish, pipette_sector
+            )
             for frame in tqdm(
                 frames, desc="Calculating area of objects touching the disk..."
             )
         ]
     )
 
-    labels, num_features = ndi.measurements.label(areas > area_cutoff)
+    thresh = areas > area_cutoff_ratio * np.mean(areas)
+    closed = ndi.binary_closing(thresh, structure=np.array([1, 1, 1]), iterations=3)
+
+    labels, num_features = ndi.measurements.label(closed)
     slices = [
         s[0] for s in ndi.measurements.find_objects(labels)
     ]  # 1d, so we just take the first slice
@@ -45,7 +74,7 @@ def find_last_pipette_frame(
     return pipette_slice.stop + extra_frames
 
 
-def _area_touching_dish(frame, dish):
+def _area_touching_dish(frame, dish, pipette_sector):
     mask = dish.mask_like(frame)
 
     masked = utils.apply_mask(frame, mask)
@@ -53,7 +82,9 @@ def _area_touching_dish(frame, dish):
         masked, thresh=0, maxval=255, type=cv.THRESH_OTSU
     )
 
-    with_edge = dish.draw_on(thresholded)
+    with_edge = dish.draw_on(
+        thresholded, start_angle=min(pipette_sector), end_angle=max(pipette_sector)
+    )
     inverted = cv.bitwise_not(with_edge)
 
     h, w = inverted.shape

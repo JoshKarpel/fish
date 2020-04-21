@@ -82,8 +82,17 @@ class Circle:
     y: int
     r: int
 
-    def draw_on(self, array, color=255):
-        return cv.circle(array, (self.x, self.y), self.r, color, thickness=1)
+    def draw_on(self, array, color=255, start_angle=0, end_angle=360, thickness=1):
+        return cv.ellipse(
+            array,
+            (self.x, self.y),
+            (self.r, self.r),
+            angle=0,
+            startAngle=start_angle,
+            endAngle=end_angle,
+            color=color,
+            thickness=thickness,
+        )
 
     def mask_like(self, array):
         mask = np.zeros_like(array, dtype=np.uint8)
