@@ -1,5 +1,6 @@
 import logging
 
+import abc
 from pathlib import Path
 import itertools
 import csv
@@ -78,17 +79,21 @@ def do_optical_flow(frames, plot_out, hand_counted):
 
             if area > LOW_AREA_BRIGHTNESS:
                 points = np.transpose((label == brightness_labels).nonzero())
-                # print(points.shape)
 
                 pca = decomp.PCA(n_components=2)
                 pca.fit(points)
-                # print(pca.components_)
 
                 y, x = pca.components_[0]
+
+                # -y because y points down the screen
                 angle = np.arctan2(-y, x)
 
                 b = BrightnessBlob(
-                    label=label, area=area, centroid=centroid, angle=angle
+                    label=label,
+                    points_in_label=brightness_labels == label,
+                    area=area,
+                    centroid=centroid,
+                    angle=angle,
                 )
                 brightness_blobs.append(b)
 
@@ -140,6 +145,7 @@ def do_optical_flow(frames, plot_out, hand_counted):
             if area > LOW_AREA_FLOW:
                 v = VelocityBlob(
                     label=label,
+                    points_in_label=flow_labels == label,
                     area=area,
                     centroid=centroid,
                     centroid_velocity=np.array(
@@ -147,6 +153,10 @@ def do_optical_flow(frames, plot_out, hand_counted):
                     ),
                 )
                 velocity_blobs.append(v)
+
+        # todo: move blob merging up here
+        # the idea is build up a feature vector for each blob with the same structure,
+        # where some entries might be zero because there's no velocity, or whatever
 
         # BRIGHTNESS FEATURES
 
@@ -158,57 +168,17 @@ def do_optical_flow(frames, plot_out, hand_counted):
 
         velocity_feature_vectors = []
         for blob in velocity_blobs:
-            feature_vector = []
-
-            # brightness
-            domain_x, domain_y = blob.domain(widths=(20, 20), points=(10, 10))
-            domain_brightness = fish.evaluate_interpolation(
-                domain_x, domain_y, brightness_interp
+            feature_vector = blob.feature_vector(
+                brightness_interpolation=brightness_interp,
+                flow=flow,
+                flow_x_interpolation=flow_x_interp,
+                flow_y_interpolation=flow_y_interp,
             )
-            feature_vector += [
-                np.mean(domain_brightness),
-                np.std(domain_brightness),
-            ]
 
-            # relative velocity
-            blob_flow = flow[flow_labels == blob.label]
-
-            v_rel = np.dot(blob_flow, blob.v_unit)
-            v_rel_mean = np.mean(v_rel)
-            v_rel_std = np.std(v_rel)
-
-            v_t_rel = np.dot(blob_flow, blob.v_t_unit)
-            v_t_rel_mean = np.sum(v_t_rel[v_t_rel != 0])
-            v_t_rel_std = np.std(v_t_rel[v_t_rel != 0])
-
-            feature_vector += [v_rel_mean, v_rel_std, v_t_rel_mean, v_t_rel_std]
-
-            domain_flow_x = fish.evaluate_interpolation(
-                domain_x, domain_y, flow_x_interp
-            )
-            domain_flow_y = fish.evaluate_interpolation(
-                domain_x, domain_y, flow_y_interp
-            )
-            domain_flow = np.stack((domain_flow_x, domain_flow_y), axis=-1)
-
-            domain_flow_u = np.dot(domain_flow, blob.v_unit).squeeze()
-            domain_flow_v = np.dot(domain_flow, blob.v_t_unit).squeeze()
-
-            feature_vector.extend(domain_flow_u.ravel())
-            feature_vector.extend(domain_flow_v.ravel())
-
-            # 1st index is "x", 2nd index is "y"
-            domain_flow_grad_u_v, domain_flow_grad_u_u = np.gradient(domain_flow_u)
-            domain_flow_grad_v_v, domain_flow_grad_v_u = np.gradient(domain_flow_v)
-            domain_divergence = domain_flow_grad_u_u + domain_flow_grad_v_v
-            domain_curl = domain_flow_grad_v_u - domain_flow_grad_u_v
-
-            feature_vector.extend(domain_divergence.ravel())
-            feature_vector.extend(domain_curl.ravel())
-
-            velocity_feature_vectors.append(np.array(feature_vector))
+            velocity_feature_vectors.append(feature_vector)
 
         velocity_feature_vectors = np.row_stack(velocity_feature_vectors)
+        # print(velocity_feature_vectors.shape)
 
         # print("velocity_feature_vectors")
         # print(velocity_feature_vectors.shape)
@@ -238,13 +208,18 @@ def do_optical_flow(frames, plot_out, hand_counted):
 
         # DISPLAY
 
-        img = fish.bw_to_bgr(frame)
+        ARROW_SCALE = 7
+        ELLIPSE_SCALE = 7
+
+        img = fish.convert_colorspace(frame, cv.COLOR_GRAY2BGR)
 
         img_flow = (
-            fish.bw_to_bgr(flow_norm_closed) * fish.fractions(*fish.YELLOW)
+            fish.convert_colorspace(flow_norm_closed, cv.COLOR_GRAY2BGR)
+            * fish.fractions(*fish.YELLOW)
         ).astype(np.uint8)
         img_objects = (
-            fish.bw_to_bgr(frame_closed) * fish.fractions(*fish.GREEN)
+            fish.convert_colorspace(frame_closed, cv.COLOR_GRAY2BGR)
+            * fish.fractions(*fish.GREEN)
         ).astype(np.uint8)
         shadows = cv.addWeighted(img_flow, 0.5, img_objects, 0.5, 0)
         img = cv.addWeighted(img, 0.6, shadows, 0.4, 0)
@@ -272,76 +247,82 @@ def do_optical_flow(frames, plot_out, hand_counted):
                 img, (blob.x, blob.y), radius=2, thickness=-1, color=fish.GREEN
             )
 
-            domain_x, domain_y = blob.domain(widths=(20, 10), points=(3, 3))
-            for y_idx, x_idx in fish.iter_domain_indices(domain_x):
-                x = domain_x[y_idx, x_idx]
-                y = domain_y[y_idx, x_idx]
-                img = fish.draw_circle(
-                    img, center=(x, y), radius=3, color=fish.RED, thickness=-1,
-                )
-            img = fish.draw_circle(
-                img,
-                center=(domain_x[0, 0], domain_y[0, 0]),
-                radius=3,
-                color=fish.GREEN,
-                thickness=-1,
-            )
-
-        ARROW_SCALE = 7
-        ELLIPSE_SCALE = 7
-
-        for blob in velocity_blobs:
-            img = fish.draw_text(
-                img, (blob.x + 20, blob.y), blob.label, color=fish.RED, size=0.5,
-            )
-            img = fish.draw_circle(
-                img, (blob.x, blob.y), radius=2, thickness=-1, color=fish.RED
+            pointing = blob.centroid + (blob.u * 50)
+            pointing_t = blob.centroid + (blob.v * 50)
+            img = fish.draw_arrow(
+                img, (blob.x, blob.y), (pointing[0], pointing[1]), color=fish.RED,
             )
             img = fish.draw_arrow(
-                img,
-                (blob.x, blob.y),
-                (blob.x + blob.v_x * ARROW_SCALE, blob.y + blob.v_y * ARROW_SCALE),
-                color=fish.RED,
-            )
-            img = fish.draw_arrow(
-                img,
-                (blob.x, blob.y),
-                (blob.x + blob.v_t_x * ARROW_SCALE, blob.y + blob.v_t_y * ARROW_SCALE),
-                color=fish.BLUE,
+                img, (blob.x, blob.y), (pointing_t[0], pointing_t[1]), color=fish.GREEN,
             )
 
-            blob_flow = flow[flow_labels == blob.label]
-            v_rel = np.dot(blob_flow, blob.v_unit)
-            v_rel_mean = np.mean(v_rel)
-            v_rel_std = np.std(v_rel)
-
-            v_t_rel = np.dot(blob_flow, blob.v_t_unit)
-            v_t_rel_mean = np.sum(v_t_rel[v_t_rel != 0])
-            v_t_rel_std = np.std(v_t_rel[v_t_rel != 0])
-
-            if not np.isnan(v_rel_mean):
-                img = fish.draw_ellipse(
-                    img,
-                    (blob.x, blob.y),
-                    (v_rel_std * ELLIPSE_SCALE, v_t_rel_std * ELLIPSE_SCALE),
-                    rotation=np.rad2deg(blob.angle),
-                    color=fish.YELLOW,
-                )
-
-            # domain_x, domain_y = blob.domain(widths = (20, 10), points = (5, 5))
+            # domain_x, domain_y = blob.domain(widths=(20, 10), points=(3, 3))
             # for y_idx, x_idx in fish.iter_domain_indices(domain_x):
             #     x = domain_x[y_idx, x_idx]
             #     y = domain_y[y_idx, x_idx]
             #     img = fish.draw_circle(
-            #         img, center = (x, y), radius = 3, color = fish.RED, thickness = -1,
+            #         img, center=(x, y), radius=3, color=fish.RED, thickness=-1,
             #     )
             # img = fish.draw_circle(
             #     img,
-            #     center = (domain_x[0, 0], domain_y[0, 0]),
-            #     radius = 3,
-            #     color = fish.GREEN,
-            #     thickness = -1,
+            #     center=(domain_x[0, 0], domain_y[0, 0]),
+            #     radius=3,
+            #     color=fish.GREEN,
+            #     thickness=-1,
             # )
+
+        # for blob in velocity_blobs:
+        #     img = fish.draw_text(
+        #         img, (blob.x + 20, blob.y), blob.label, color=fish.RED, size=0.5,
+        #     )
+        #     img = fish.draw_circle(
+        #         img, (blob.x, blob.y), radius=2, thickness=-1, color=fish.RED
+        #     )
+        #     img = fish.draw_arrow(
+        #         img,
+        #         (blob.x, blob.y),
+        #         (blob.x + blob.v_x * ARROW_SCALE, blob.y + blob.v_y * ARROW_SCALE),
+        #         color=fish.RED,
+        #     )
+        #     img = fish.draw_arrow(
+        #         img,
+        #         (blob.x, blob.y),
+        #         (blob.x + blob.v_t_x * ARROW_SCALE, blob.y + blob.v_t_y * ARROW_SCALE),
+        #         color=fish.BLUE,
+        #     )
+        #
+        #     blob_flow = flow[flow_labels == blob.label]
+        #     v_rel = np.dot(blob_flow, blob.u)
+        #     v_rel_mean = np.mean(v_rel)
+        #     v_rel_std = np.std(v_rel)
+        #
+        #     v_t_rel = np.dot(blob_flow, blob.v)
+        #     v_t_rel_mean = np.sum(v_t_rel[v_t_rel != 0])
+        #     v_t_rel_std = np.std(v_t_rel[v_t_rel != 0])
+        #
+        #     if not np.isnan(v_rel_mean):
+        #         img = fish.draw_ellipse(
+        #             img,
+        #             (blob.x, blob.y),
+        #             (v_rel_std * ELLIPSE_SCALE, v_t_rel_std * ELLIPSE_SCALE),
+        #             rotation=np.rad2deg(blob.angle),
+        #             color=fish.YELLOW,
+        #         )
+        #
+        #     # domain_x, domain_y = blob.domain(widths = (20, 10), points = (5, 5))
+        #     # for y_idx, x_idx in fish.iter_domain_indices(domain_x):
+        #     #     x = domain_x[y_idx, x_idx]
+        #     #     y = domain_y[y_idx, x_idx]
+        #     #     img = fish.draw_circle(
+        #     #         img, center = (x, y), radius = 3, color = fish.RED, thickness = -1,
+        #     #     )
+        #     # img = fish.draw_circle(
+        #     #     img,
+        #     #     center = (domain_x[0, 0], domain_y[0, 0]),
+        #     #     radius = 3,
+        #     #     color = fish.GREEN,
+        #     #     thickness = -1,
+        #     # )
 
         yield img
 
@@ -380,9 +361,10 @@ def do_optical_flow(frames, plot_out, hand_counted):
     plt.savefig(str(plot_out))
 
 
-class Blob:
-    def __init__(self, label, area, centroid):
+class Blob(metaclass=abc.ABCMeta):
+    def __init__(self, label, points_in_label, area, centroid):
         self.label = label
+        self.points_in_label = points_in_label
         self.area = area
         self.centroid = centroid
 
@@ -394,53 +376,154 @@ class Blob:
     def y(self):
         return self.centroid[1]
 
+    @property
+    @abc.abstractmethod
+    def u(self):
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def v(self):
+        raise NotImplementedError
+
     def domain(self, widths, points=None):
         return fish.rotate_domain_xy(
             *fish.domain(center=self.centroid, widths=widths, points=points),
             angle=self.angle,
         )
 
+    def feature_vector(
+        self,
+        *,
+        brightness_interpolation,
+        flow,
+        flow_x_interpolation,
+        flow_y_interpolation,
+    ):
+        feature_vector = []
+
+        domain_x, domain_y = self.domain(widths=(20, 20), points=(10, 10))
+
+        domain_brightness = fish.evaluate_interpolation(
+            domain_x, domain_y, brightness_interpolation
+        )
+        feature_vector += [
+            np.mean(domain_brightness),
+            np.std(domain_brightness),
+        ]
+
+        feature_vector += self._fv_relative_velocity_mean_and_std(flow)
+
+        domain_flow_x = fish.evaluate_interpolation(
+            domain_x, domain_y, flow_x_interpolation
+        )
+        domain_flow_y = fish.evaluate_interpolation(
+            domain_x, domain_y, flow_y_interpolation
+        )
+
+        domain_flow_u, domain_flow_v = self._domain_flow_uv_from_xy(
+            domain_flow_x, domain_flow_y
+        )
+
+        feature_vector += [*domain_flow_u.ravel(), *domain_flow_v.ravel()]
+
+        domain_divergence, domain_curl = self._domain_flow_div_and_curl(
+            domain_flow_u, domain_flow_v
+        )
+
+        feature_vector += [*domain_divergence.ravel(), *domain_curl.ravel()]
+
+        return np.array(feature_vector)
+
+    def _domain_flow_uv_from_xy(self, domain_flow_x, domain_flow_y):
+        domain_flow = np.stack((domain_flow_x, domain_flow_y), axis=-1)
+        domain_flow_u = np.dot(domain_flow, self.u).squeeze()
+        domain_flow_v = np.dot(domain_flow, self.v).squeeze()
+
+        return domain_flow_u, domain_flow_v
+
+    def _fv_relative_velocity_mean_and_std(self, flow):
+        blob_flow = flow[self.points_in_label]
+
+        v_rel = np.dot(blob_flow, self.u)
+        v_rel_mean = np.mean(v_rel)
+        v_rel_std = np.std(v_rel)
+
+        v_t_rel = np.dot(blob_flow, self.v)
+        v_t_rel_mean = np.sum(v_t_rel[v_t_rel != 0])
+        v_t_rel_std = np.std(v_t_rel[v_t_rel != 0])
+
+        return [v_rel_mean, v_rel_std, v_t_rel_mean, v_t_rel_std]
+
+    def _domain_flow_div_and_curl(self, domain_flow_u, domain_flow_v):
+        # 1st index is "x", 2nd index is "y"
+        domain_flow_grad_u_v, domain_flow_grad_u_u = np.gradient(domain_flow_u)
+        domain_flow_grad_v_v, domain_flow_grad_v_u = np.gradient(domain_flow_v)
+        domain_divergence = domain_flow_grad_u_u + domain_flow_grad_v_v
+        domain_curl = domain_flow_grad_v_u - domain_flow_grad_u_v
+
+        return domain_divergence, domain_curl
+
 
 class BrightnessBlob(Blob):
-    def __init__(self, label, area, centroid, angle):
-        super().__init__(label, area, centroid)
+    def __init__(self, label, points_in_label, area, centroid, angle):
+        super().__init__(label, points_in_label, area, centroid)
         self.angle = angle
+
+    @property
+    def u(self):
+        """Unit vector along the pointing angle."""
+        # TODO: probably a minus sign on the y component
+        return np.array([np.cos(self.angle), -np.sin(self.angle)])
+
+    @property
+    def v(self):
+        """Unit vector tangent to the pointing angle."""
+        x, y = self.u
+        return np.array([-y, x])
 
 
 class VelocityBlob(Blob):
-    def __init__(self, label, area, centroid, centroid_velocity):
-        super().__init__(label, area, centroid)
+    def __init__(self, label, points_in_label, area, centroid, centroid_velocity):
+        super().__init__(label, points_in_label, area, centroid)
         self.centroid_velocity = centroid_velocity
         self.centroid_velocity_tangent = np.array([self.v_y, -self.v_x])
 
     @property
     def v_x(self):
+        """The x component of the centroid velocity."""
         return self.centroid_velocity[0]
 
     @property
     def v_y(self):
+        """The y component of the centroid velocity."""
         return self.centroid_velocity[1]
 
     @property
     def v_t_x(self):
+        """The x component of the tangent to the centroid velocity."""
         return self.centroid_velocity_tangent[0]
 
     @property
     def v_t_y(self):
+        """The y component of the tangent to the centroid velocity."""
         return self.centroid_velocity_tangent[1]
 
     @property
-    def v_unit(self):
+    def u(self):
+        """Unit vector along the centroid velocity."""
         return self.centroid_velocity / np.linalg.norm(self.centroid_velocity)
 
     @property
-    def v_t_unit(self):
+    def v(self):
+        """Unit vector tangent to the centroid velocity."""
         return self.centroid_velocity_tangent / np.linalg.norm(
             self.centroid_velocity_tangent
         )
 
     @property
     def angle(self):
+        """The angle of the centroid velocity."""
         # -v_y because positive v_y points down on the screen
         return np.arctan2(-self.v_y, self.v_x)
 
@@ -450,13 +533,16 @@ if __name__ == "__main__":
     DATA = HERE.parent / "data"
     OUT = HERE / "out" / Path(__file__).stem
 
-    movies = [f"D1-{n}" for n in range(1, 13)] + [f"C-{n}" for n in range(1, 4)]
+    # movies = [p for p in DATA.iterdir() if p.suffix == ".hsv"]
+    movies = [DATA / "D1-1.hsv"]
     hand_by_movie = {
-        hc.path: hc for hc in fish.load_hand_counted_data(DATA / "counts.csv")
+        hc.movie: hc for hc in fish.load_hand_counted_data(DATA / "counts.csv")
     }
 
-    for movie in movies[:1]:
-        input_frames = fish.cached_read((DATA / f"{movie}.hsv"))[500:600]
+    for path in movies:
+        movie = path.stem
+
+        input_frames = fish.cached_read(path)[500:600]
 
         frames = do_optical_flow(
             input_frames,
