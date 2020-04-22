@@ -160,9 +160,17 @@ def do_optical_flow(frames, plot_out, hand_counted):
 
         # BRIGHTNESS FEATURES
 
-        # brightness_features = []
-        # for blob in brightness_blobs:
-        #     domain_x, domain_y = blob.domain((10, 10))
+        brightness_feature_vectors = []
+        for blob in brightness_blobs:
+            feature_vector = blob.feature_vector(
+                brightness_interpolation=brightness_interp,
+                flow_x_interpolation=flow_x_interp,
+                flow_y_interpolation=flow_y_interp,
+            )
+
+            brightness_feature_vectors.append(feature_vector)
+
+        brightness_feature_vectors = np.row_stack(brightness_feature_vectors)
 
         # VELOCITY FEATURES
 
@@ -170,7 +178,6 @@ def do_optical_flow(frames, plot_out, hand_counted):
         for blob in velocity_blobs:
             feature_vector = blob.feature_vector(
                 brightness_interpolation=brightness_interp,
-                flow=flow,
                 flow_x_interpolation=flow_x_interp,
                 flow_y_interpolation=flow_y_interp,
             )
@@ -178,7 +185,6 @@ def do_optical_flow(frames, plot_out, hand_counted):
             velocity_feature_vectors.append(feature_vector)
 
         velocity_feature_vectors = np.row_stack(velocity_feature_vectors)
-        # print(velocity_feature_vectors.shape)
 
         # print("velocity_feature_vectors")
         # print(velocity_feature_vectors.shape)
@@ -393,12 +399,7 @@ class Blob(metaclass=abc.ABCMeta):
         )
 
     def feature_vector(
-        self,
-        *,
-        brightness_interpolation,
-        flow,
-        flow_x_interpolation,
-        flow_y_interpolation,
+        self, *, brightness_interpolation, flow_x_interpolation, flow_y_interpolation,
     ):
         feature_vector = []
 
@@ -407,12 +408,7 @@ class Blob(metaclass=abc.ABCMeta):
         domain_brightness = fish.evaluate_interpolation(
             domain_x, domain_y, brightness_interpolation
         )
-        feature_vector += [
-            np.mean(domain_brightness),
-            np.std(domain_brightness),
-        ]
-
-        feature_vector += self._fv_relative_velocity_mean_and_std(flow)
+        feature_vector += [*domain_brightness.ravel()]
 
         domain_flow_x = fish.evaluate_interpolation(
             domain_x, domain_y, flow_x_interpolation
@@ -442,7 +438,7 @@ class Blob(metaclass=abc.ABCMeta):
 
         return domain_flow_u, domain_flow_v
 
-    def _fv_relative_velocity_mean_and_std(self, flow):
+    def _relative_velocity_mean_and_std(self, flow):
         blob_flow = flow[self.points_in_label]
 
         v_rel = np.dot(blob_flow, self.u)
@@ -450,8 +446,8 @@ class Blob(metaclass=abc.ABCMeta):
         v_rel_std = np.std(v_rel)
 
         v_t_rel = np.dot(blob_flow, self.v)
-        v_t_rel_mean = np.sum(v_t_rel[v_t_rel != 0])
-        v_t_rel_std = np.std(v_t_rel[v_t_rel != 0])
+        v_t_rel_mean = np.mean(v_t_rel)
+        v_t_rel_std = np.std(v_t_rel)
 
         return [v_rel_mean, v_rel_std, v_t_rel_mean, v_t_rel_std]
 
@@ -478,7 +474,7 @@ class BrightnessBlob(Blob):
 
     @property
     def v(self):
-        """Unit vector tangent to the pointing angle."""
+        """Unit vector of the orthogonal vector to the pointing angle."""
         x, y = self.u
         return np.array([-y, x])
 
@@ -501,12 +497,12 @@ class VelocityBlob(Blob):
 
     @property
     def v_t_x(self):
-        """The x component of the tangent to the centroid velocity."""
+        """The x component of the orthogonal vector to the centroid velocity."""
         return self.centroid_velocity_tangent[0]
 
     @property
     def v_t_y(self):
-        """The y component of the tangent to the centroid velocity."""
+        """The y component of the orthogonal vector to the centroid velocity."""
         return self.centroid_velocity_tangent[1]
 
     @property
@@ -516,7 +512,7 @@ class VelocityBlob(Blob):
 
     @property
     def v(self):
-        """Unit vector tangent to the centroid velocity."""
+        """Unit vector orthogonal to the centroid velocity."""
         return self.centroid_velocity_tangent / np.linalg.norm(
             self.centroid_velocity_tangent
         )
