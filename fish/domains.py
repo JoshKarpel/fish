@@ -14,8 +14,24 @@ def domain(center, widths, points=None):
     vecs = [
         np.linspace(-w / 2, w / 2, num=n) + c for c, w, n in zip(center, widths, points)
     ]
-    # print(vecs)
+
     return np.meshgrid(*vecs, indexing="xy")
+
+
+def domain_circle(center, r, r_points=10, theta_points=10):
+    vecs = [
+        np.linspace(0.5, r, r_points),
+        np.linspace(0, 2 * np.pi, theta_points, endpoint=False),
+    ]
+
+    r, theta = np.meshgrid(*vecs, indexing="xy")
+    x, y = r * np.cos(theta), -r * np.sin(theta)
+
+    c_x, c_y = center
+    x += c_x
+    y += c_y
+
+    return x, y
 
 
 # TODO: consider returning the arrays pre-stacked; depends on exact use cases

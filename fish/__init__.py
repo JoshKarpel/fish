@@ -43,6 +43,7 @@ from .flow import optical_flow, average_velocity_per_frame, total_velocity_per_f
 from .hand import HandCounted, load_hand_counted_data
 from .domains import (
     domain,
+    domain_circle,
     iter_domain_indices,
     rotate_domain_xy,
     interpolate_frame,
