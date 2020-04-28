@@ -1,14 +1,17 @@
-FROM htcondor/htmap-exec:v0.5.0
+FROM continuumio/miniconda3:latest
+ENV PATH=/opt/conda/bin/:${PATH}
 
-USER root
+RUN apt-get update \
+ && apt-get install -y libgl1-mesa-glx \
+ && rm -rf /var/lib/apt/lists/* \
+ && conda install -c conda-forge -y numpy scipy matplotlib opencv opencv=4.2 scikit-learn scikit-image
 
-RUN conda update -y --all \
- && conda install -y opencv \
- && conda clean -y --all
-
-ARG CACHEBUST=1
-
-RUN pip install --no-cache-dir git+https://github.com/JoshKarpel/fish.git \
+COPY . /tmp/fish
+RUN pip install --no-cache-dir htmap \
+ && pip install --no-cache-dir /tmp/fish \
  && python -c "import fish"
 
-USER htmap
+ARG USER=htmap
+RUN groupadd ${USER} \
+ && useradd -m -g ${USER} ${USER}
+USER ${USER}

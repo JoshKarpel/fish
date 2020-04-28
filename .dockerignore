@@ -107,12 +107,12 @@ venv.bak/
 .idea/
 
 # input/output files
-*.mp4
 *.avi
 *.npy
-*.hsv
-*.hsv*
 
 *.json
 
-*/out/
+data/
+notebooks/
+dev/
+.git/
