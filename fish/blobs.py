@@ -10,16 +10,16 @@ import numpy as np
 from sklearn import decomposition as decomp
 
 import fish
-from dev.find_blobs import FLOW_CLOSE_KERNEL
 
 LOW_AREA_BRIGHTNESS = 100
 LOW_AREA_VELOCITY = 100
 
 
-def threshold_and_close(image, threshold=128, type=cv.THRESH_OTSU):
+def threshold_and_close(image, threshold=128, type=cv.THRESH_OTSU, kernel_size=5):
+    kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (kernel_size, kernel_size))
     thresh, thresholded = cv.threshold(image, thresh=threshold, maxval=255, type=type)
 
-    closed = cv.morphologyEx(thresholded, cv.MORPH_CLOSE, FLOW_CLOSE_KERNEL)
+    closed = cv.morphologyEx(thresholded, cv.MORPH_CLOSE, kernel)
 
     return closed
 

@@ -11,15 +11,6 @@ import fish
 
 logging.basicConfig()
 
-FLOW_CLOSE_KERNEL_SIZE = 5
-FLOW_CLOSE_KERNEL = cv.getStructuringElement(
-    cv.MORPH_ELLIPSE, (FLOW_CLOSE_KERNEL_SIZE, FLOW_CLOSE_KERNEL_SIZE)
-)
-FRAME_CLOSE_KERNEL_SIZE = 5
-FRAME_CLOSE_KERNEL = cv.getStructuringElement(
-    cv.MORPH_ELLIPSE, (FRAME_CLOSE_KERNEL_SIZE, FRAME_CLOSE_KERNEL_SIZE)
-)
-
 
 def find_blobs(movie_path, blobs_path):
     frames = fish.cached_read(movie_path)
