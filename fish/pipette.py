@@ -23,7 +23,7 @@ def find_last_pipette_frame(
     area_cutoff_ratio=2,
     pipette_sector=(0, 90),
     extra_frames=20,
-    upper_bound = 200,
+    upper_bound=200,
 ):
     """
 
@@ -56,7 +56,8 @@ def find_last_pipette_frame(
                 bgnd.subtract_background(frame, background), dish, pipette_sector
             )
             for frame in tqdm(
-                frames[:upper_bound], desc="Calculating area of objects touching the disk"
+                frames[:upper_bound],
+                desc="Calculating area of objects touching the disk",
             )
         ]
     )

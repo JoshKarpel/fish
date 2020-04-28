@@ -38,4 +38,4 @@ def background_via_min(frames):
 
 
 def subtract_background(frame, background):
-    return np.where(frame > background, frame - background, 0)
+    return cv.subtract(frame, background)

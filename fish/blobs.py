@@ -1,24 +1,34 @@
-from typing import Optional, List
+from typing import List, Mapping
 
 import abc
 import pickle
 from pathlib import Path
+import gzip
 
 import cv2 as cv
 import numpy as np
 from sklearn import decomposition as decomp
 
 import fish
+from dev.find_blobs import FLOW_CLOSE_KERNEL
 
 LOW_AREA_BRIGHTNESS = 100
 LOW_AREA_VELOCITY = 100
+
+
+def threshold_and_close(image, threshold=128, type=cv.THRESH_OTSU):
+    thresh, thresholded = cv.threshold(image, thresh=threshold, maxval=255, type=type)
+
+    closed = cv.morphologyEx(thresholded, cv.MORPH_CLOSE, FLOW_CLOSE_KERNEL)
+
+    return closed
 
 
 class Blob(metaclass=abc.ABCMeta):
     def __init__(
         self,
         *,
-        movie_name,
+        movie,
         frame_idx,
         label,
         points_in_label,
@@ -28,7 +38,7 @@ class Blob(metaclass=abc.ABCMeta):
         velocity_x_interpolation,
         velocity_y_interpolation,
     ):
-        self.movie_name = movie_name
+        self.movie = movie
         self.frame_idx = frame_idx
 
         self.label = label
@@ -52,6 +62,9 @@ class Blob(metaclass=abc.ABCMeta):
         self.domain_flow_u, self.domain_flow_v = self._domain_flow_uv_from_xy(
             domain_flow_x, domain_flow_y
         )
+
+    def movie_path(self, movies_dir: Path) -> Path:
+        return movies_dir / self.movie
 
     @property
     def x(self):
@@ -184,51 +197,8 @@ class VelocityBlob(Blob):
         return np.arctan2(-self.v_y, self.v_x)
 
 
-def find_velocity_blobs(
-    movie_name,
-    frame_idx,
-    velocity_norm_closed,
-    brightness_interpolation,
-    velocity_x_interpolation,
-    velocity_y_interpolation,
-):
-    (
-        velocity_num_labels,
-        velocity_labels,
-        velocity_stats,
-        velocity_centroids,
-    ) = cv.connectedComponentsWithStats(velocity_norm_closed, 8)
-
-    velocity_blobs = []
-    for label in range(1, velocity_num_labels):
-        area = velocity_stats[label, cv.CC_STAT_AREA]
-        centroid = velocity_centroids[label]
-
-        if area > LOW_AREA_VELOCITY:
-            v = VelocityBlob(
-                movie_name=movie_name,
-                frame_idx=frame_idx,
-                label=label,
-                points_in_label=velocity_labels == label,
-                area=area,
-                centroid=centroid,
-                centroid_velocity=np.array(
-                    [
-                        velocity_x_interpolation(centroid),
-                        velocity_y_interpolation(centroid),
-                    ]
-                ),
-                brightness_interpolation=brightness_interpolation,
-                velocity_x_interpolation=velocity_x_interpolation,
-                velocity_y_interpolation=velocity_y_interpolation,
-            )
-            velocity_blobs.append(v)
-
-    return velocity_labels, velocity_blobs
-
-
 def find_brightness_blobs(
-    movie_name,
+    movie,
     frame_idx,
     frame_closed,
     brightness_interpolation,
@@ -247,39 +217,90 @@ def find_brightness_blobs(
         area = brightness_stats[label, cv.CC_STAT_AREA]
         centroid = brightness_centroids[label]
 
-        if area > LOW_AREA_BRIGHTNESS:
-            points = np.transpose((label == brightness_labels).nonzero())
+        if area < LOW_AREA_BRIGHTNESS:
+            continue
 
-            pca = decomp.PCA(n_components=2)
-            pca.fit(points)
+        points_in_label = np.where(brightness_labels == label)
 
-            y, x = pca.components_[0]
+        pca = decomp.PCA(n_components=2)
+        pca.fit(np.transpose(points_in_label))
+        y, x = pca.components_[0]
+        # -y because y points down the screen
+        angle = np.arctan2(-y, x)
 
-            # -y because y points down the screen
-            angle = np.arctan2(-y, x)
+        b = BrightnessBlob(
+            movie=movie,
+            frame_idx=frame_idx,
+            label=label,
+            points_in_label=points_in_label,
+            area=area,
+            centroid=centroid,
+            angle=angle,
+            brightness_interpolation=brightness_interpolation,
+            velocity_x_interpolation=velocity_x_interpolation,
+            velocity_y_interpolation=velocity_y_interpolation,
+        )
+        brightness_blobs.append(b)
 
-            b = BrightnessBlob(
-                movie_name=movie_name,
-                frame_idx=frame_idx,
-                label=label,
-                points_in_label=brightness_labels == label,
-                area=area,
-                centroid=centroid,
-                angle=angle,
-                brightness_interpolation=brightness_interpolation,
-                velocity_x_interpolation=velocity_x_interpolation,
-                velocity_y_interpolation=velocity_y_interpolation,
-            )
-            brightness_blobs.append(b)
-
-    return brightness_labels, brightness_blobs
+    return brightness_blobs
 
 
-def save_blobs(path: Path, blobs: Optional[List[Blob]]):
-    with path.open(mode="wb") as f:
+def find_velocity_blobs(
+    movie,
+    frame_idx,
+    velocity_norm_closed,
+    brightness_interpolation,
+    velocity_x_interpolation,
+    velocity_y_interpolation,
+):
+    (
+        velocity_num_labels,
+        velocity_labels,
+        velocity_stats,
+        velocity_centroids,
+    ) = cv.connectedComponentsWithStats(velocity_norm_closed, 8)
+
+    velocity_blobs = []
+    for label in range(1, velocity_num_labels):
+        area = velocity_stats[label, cv.CC_STAT_AREA]
+        centroid = velocity_centroids[label]
+
+        if area < LOW_AREA_VELOCITY:
+            continue
+
+        v = VelocityBlob(
+            movie=movie,
+            frame_idx=frame_idx,
+            label=label,
+            points_in_label=np.where(velocity_labels == label),
+            area=area,
+            centroid=centroid,
+            centroid_velocity=np.array(
+                [
+                    velocity_x_interpolation(centroid),
+                    velocity_y_interpolation(centroid),
+                ]
+            ),
+            brightness_interpolation=brightness_interpolation,
+            velocity_x_interpolation=velocity_x_interpolation,
+            velocity_y_interpolation=velocity_y_interpolation,
+        )
+        velocity_blobs.append(v)
+
+    return velocity_blobs
+
+
+def save_blobs(path: Path, blobs: Mapping[int, List[Blob]]):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with gzip.open(path, mode="wb") as f:
         pickle.dump(blobs, f)
 
 
-def load_blobs(path: Path) -> Optional[List[Blob]]:
-    with path.open(mode="rb") as f:
+def load_blobs(path: Path) -> Mapping[int, List[Blob]]:
+    with gzip.open(path, mode="rb") as f:
         return pickle.load(f)
+
+
+def blobs_path(movie_path: Path, out_dir: Path) -> Path:
+    return out_dir / f"{movie_path.stem}.blobs"

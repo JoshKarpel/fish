@@ -7,8 +7,6 @@ from tqdm import tqdm
 import numpy as np
 import cv2 as cv
 
-import matplotlib.pyplot as plt
-
 import fish
 
 logging.basicConfig()
@@ -23,27 +21,26 @@ FRAME_CLOSE_KERNEL = cv.getStructuringElement(
 )
 
 
-def find_blobs(movie_path, out_dir):
-    out_dir.mkdir(parents = True, exist_ok = True)
-
+def find_blobs(movie_path, blobs_path):
     frames = fish.cached_read(movie_path)
-    movie_name = movie_path.stem
 
     bgnd = fish.background_via_min(frames)
 
     dish = fish.find_dish(bgnd)
     dish_mask = dish.mask_like(bgnd)
 
-    start_frame = fish.find_last_pipette_frame(frames, background = bgnd, dish = dish)
+    start_frame = fish.find_last_pipette_frame(frames, background=bgnd, dish=dish)
 
     bgnd = fish.background_via_min(frames[start_frame:])
 
     velocity = None
-    for frame_idx, frame in enumerate(tqdm(frames, desc = "Finding blobs")):
-        blob_path = out_dir / f'{movie_name}__frame={frame_idx}.blobs'
+    blobs_by_frame = {}
+    for frame_idx, frame in enumerate(tqdm(frames, desc="Finding blobs")):
+        # if frame_idx > 200:
+        #     break
 
         if frame_idx < start_frame:
-            fish.save_blobs(blob_path, None)
+            blobs_by_frame[frame_idx] = None
             continue
 
         frame_masked = fish.apply_mask(frame, dish_mask)
@@ -57,28 +54,18 @@ def find_blobs(movie_path, out_dir):
 
         # OBJECT CALCULATIONS
 
-        frame_thresh, frame_thresholded = cv.threshold(
-            frame_masked_no_bgnd, thresh = 30, maxval = 255, type = cv.THRESH_BINARY
-        )
-
-        frame_closed = cv.morphologyEx(
-            frame_thresholded, cv.MORPH_CLOSE, FLOW_CLOSE_KERNEL
+        frame_closed = fish.threshold_and_close(
+            frame_masked_no_bgnd, threshold=30, type=cv.THRESH_BINARY
         )
 
         velocity = fish.optical_flow(
             prev_frame_masked_no_bgnd, frame_masked_no_bgnd, velocity,
         )
 
-        flow_norm = np.linalg.norm(velocity, axis = -1)
+        flow_norm = np.linalg.norm(velocity, axis=-1)
         flow_norm_image = (flow_norm * 255 / np.max(flow_norm)).astype(np.uint8)
 
-        flow_thresh, flow_norm_thresholded = cv.threshold(
-            flow_norm_image, thresh = 0, maxval = 255, type = cv.THRESH_OTSU
-        )
-
-        flow_norm_closed = cv.morphologyEx(
-            flow_norm_thresholded, cv.MORPH_CLOSE, FLOW_CLOSE_KERNEL
-        )
+        flow_norm_closed = fish.threshold_and_close(flow_norm_image)
 
         vel_x = velocity[..., 0]
         vel_y = velocity[..., 1]
@@ -87,16 +74,16 @@ def find_blobs(movie_path, out_dir):
 
         # BLOBS
 
-        brightness_labels, brightness_blobs = fish.find_brightness_blobs(
-            movie_name,
+        brightness_blobs = fish.find_brightness_blobs(
+            movie_path.name,
             frame_idx,
             frame_closed,
             brightness_interp,
             vel_x_interp,
             vel_y_interp,
         )
-        flow_labels, velocity_blobs = fish.find_velocity_blobs(
-            movie_name,
+        velocity_blobs = fish.find_velocity_blobs(
+            movie_path.name,
             frame_idx,
             flow_norm_closed,
             brightness_interp,
@@ -104,9 +91,9 @@ def find_blobs(movie_path, out_dir):
             vel_y_interp,
         )
 
-        blobs = brightness_blobs + velocity_blobs
+        blobs_by_frame[frame_idx] = brightness_blobs + velocity_blobs
 
-        fish.save_blobs(blob_path, blobs)
+    fish.save_blobs(blobs_path, blobs_by_frame)
 
 
 if __name__ == "__main__":
@@ -117,5 +104,6 @@ if __name__ == "__main__":
     # movies = [p for p in DATA.iterdir() if p.suffix == ".hsv"]
     movies = [DATA / "D1-1.hsv"]
 
-    for path in movies:
-        find_blobs(path, out_dir = OUT)
+    for movie_path in movies:
+        blobs_path = fish.blobs_path(movie_path, OUT)
+        find_blobs(movie_path, blobs_path)
