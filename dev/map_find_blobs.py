@@ -93,9 +93,7 @@ def find_blobs(movie_name):
 
         blobs_by_frame[frame_idx] = brightness_blobs + velocity_blobs
 
-    fish.save_blobs(blobs_path, blobs_by_frame)
-
-    htmap.transfer_output_files(blobs_path)
+    return blobs_by_frame
 
 
 if __name__ == "__main__":
