@@ -95,6 +95,8 @@ def find_blobs(movie_name):
 
     fish.save_blobs(blobs_path, blobs_by_frame)
 
+    htmap.transfer_output_files(blobs_path)
+
 
 if __name__ == "__main__":
     docker_image, s3_url, s3_root, s3_bucket, tag = sys.argv[1:]
