@@ -39,9 +39,6 @@ def find_blobs(movie_name):
     velocity = None
     blobs_by_frame = {}
     for frame_idx, frame in enumerate(tqdm(frames, desc="Finding blobs")):
-        # if frame_idx > 200:
-        #     break
-
         if frame_idx < start_frame:
             blobs_by_frame[frame_idx] = None
             continue
@@ -119,8 +116,8 @@ if __name__ == "__main__":
         movie_names,
         tag=tag,
         map_options=htmap.MapOptions(
-            request_memory="2GB",
-            request_disk="1GB",
+            request_memory="7GB",
+            request_disk="2GB",
             input_files=movie_paths,
             aws_access_key_id_file=(s3_keys_root / "access.key").as_posix(),
             aws_secret_access_key_file=(s3_keys_root / "secret.key").as_posix(),

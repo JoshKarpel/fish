@@ -27,9 +27,6 @@ def find_blobs(movie_path, blobs_path):
     velocity = None
     blobs_by_frame = {}
     for frame_idx, frame in enumerate(tqdm(frames, desc="Finding blobs")):
-        # if frame_idx > 200:
-        #     break
-
         if frame_idx < start_frame:
             blobs_by_frame[frame_idx] = None
             continue
