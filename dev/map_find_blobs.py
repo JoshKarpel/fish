@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 import numpy as np
 import cv2 as cv
+import pickle
 
 import fish
 
@@ -23,8 +24,28 @@ FRAME_CLOSE_KERNEL = cv.getStructuringElement(
 
 def find_blobs(movie_name):
     movie_path = Path.cwd() / movie_name
-    blobs_path = fish.blobs_path(movie_path, Path.cwd())
 
+    tmp = Path.cwd() / "tmp-blob-store"
+
+    with tmp.open(mode="wb") as f:
+        for item in yield_blobs(movie_path):
+            pickle.dump(item, f)
+        pickle.dump(None, f)
+
+    return dict(load_tmp_blobs(tmp))
+
+
+def load_tmp_blobs(tmp_blobs_path):
+    with tmp_blobs_path.open(mode="rb") as f:
+        item = pickle.load(f)
+
+        if item is None:
+            return
+
+        yield item
+
+
+def yield_blobs(movie_path):
     frames = fish.read(movie_path)
 
     bgnd = fish.background_via_min(frames)
@@ -91,18 +112,18 @@ def find_blobs(movie_name):
             vel_y_interp,
         )
 
-        blobs_by_frame[frame_idx] = brightness_blobs + velocity_blobs
+        blobs = brightness_blobs + velocity_blobs
 
-    return blobs_by_frame
+        yield frame_idx, blobs
 
 
 if __name__ == "__main__":
-    docker_image, s3_url, s3_root, s3_bucket, tag = sys.argv[1:]
+    docker_image, s3_url, mc_alias, s3_bucket, tag = sys.argv[1:]
 
     movie_names = [
         line.split()[-1]
         for line in subprocess.run(
-            ["mc", "ls", f"{s3_root}/{s3_bucket}"], capture_output=True, text=True
+            ["mc", "ls", f"{mc_alias}/{s3_bucket}"], capture_output=True, text=True
         ).stdout.splitlines()
     ]
     movie_paths = [[f"s3://{s3_url}/{s3_bucket}/{movie}"] for movie in movie_names]
@@ -116,7 +137,7 @@ if __name__ == "__main__":
         movie_names,
         tag=tag,
         map_options=htmap.MapOptions(
-            request_memory="7GB",
+            request_memory="4GB",
             request_disk="2GB",
             input_files=movie_paths,
             aws_access_key_id_file=(s3_keys_root / "access.key").as_posix(),
