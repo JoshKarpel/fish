@@ -37,12 +37,13 @@ def find_blobs(movie_name):
 
 def load_tmp_blobs(tmp_blobs_path):
     with tmp_blobs_path.open(mode="rb") as f:
-        item = pickle.load(f)
+        while True:
+            item = pickle.load(f)
 
-        if item is None:
-            return
+            if item is None:
+                return
 
-        yield item
+            yield item
 
 
 def yield_blobs(movie_path):
@@ -58,10 +59,9 @@ def yield_blobs(movie_path):
     bgnd = fish.background_via_min(frames[start_frame:])
 
     velocity = None
-    blobs_by_frame = {}
     for frame_idx, frame in enumerate(tqdm(frames, desc="Finding blobs")):
         if frame_idx < start_frame:
-            blobs_by_frame[frame_idx] = None
+            yield frame_idx, None
             continue
 
         frame_masked = fish.apply_mask(frame, dish_mask)
