@@ -32,7 +32,7 @@ def find_blobs(movie_name):
             pickle.dump(item, f)
         pickle.dump(None, f)
 
-    return dict(load_tmp_blobs(tmp))
+    return movie_name, dict(load_tmp_blobs(tmp))
 
 
 def load_tmp_blobs(tmp_blobs_path):
