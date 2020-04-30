@@ -32,7 +32,12 @@ def find_blobs(movie_name):
             pickle.dump(item, f)
         pickle.dump(None, f)
 
-    return movie_name, dict(load_tmp_blobs(tmp))
+    blobs_file = Path.cwd() / Path(movie_name).with_suffix('.blobs')
+    frame_to_blobs = dict(load_tmp_blobs(tmp))
+    fish.save_blobs(blobs_file, frame_to_blobs)
+    htmap.transfer_output_files(blobs_file)
+
+    return movie_name
 
 
 def load_tmp_blobs(tmp_blobs_path):
@@ -137,7 +142,7 @@ if __name__ == "__main__":
         movie_names,
         tag=tag,
         map_options=htmap.MapOptions(
-            request_memory="4GB",
+            request_memory="6GB",
             request_disk="2GB",
             input_files=movie_paths,
             aws_access_key_id_file=(s3_keys_root / "access.key").as_posix(),
