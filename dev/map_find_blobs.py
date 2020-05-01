@@ -142,7 +142,7 @@ if __name__ == "__main__":
         movie_names,
         tag=tag,
         map_options=htmap.MapOptions(
-            request_memory="6GB",
+            request_memory="8GB",
             request_disk="2GB",
             input_files=movie_paths,
             aws_access_key_id_file=(s3_keys_root / "access.key").as_posix(),
