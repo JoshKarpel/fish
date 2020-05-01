@@ -32,7 +32,7 @@ def find_blobs(movie_name):
             pickle.dump(item, f)
         pickle.dump(None, f)
 
-    blobs_file = Path.cwd() / Path(movie_name).with_suffix('.blobs')
+    blobs_file = Path.cwd() / Path(movie_name).with_suffix(".blobs")
     frame_to_blobs = dict(load_tmp_blobs(tmp))
     fish.save_blobs(blobs_file, frame_to_blobs)
     htmap.transfer_output_files(blobs_file)

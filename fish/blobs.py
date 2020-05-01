@@ -34,6 +34,8 @@ class Blob(metaclass=abc.ABCMeta):
         points_in_label,
         area,
         centroid,
+        domain_widths=(30, 20),
+        domain_points=(30, 20),
         brightness_interpolation,
         velocity_x_interpolation,
         velocity_y_interpolation,
@@ -46,7 +48,10 @@ class Blob(metaclass=abc.ABCMeta):
         self.area = area
         self.centroid = centroid
 
-        domain_x, domain_y = self.domain(widths=(20, 20), points=(10, 10))
+        self.domain_widths = domain_widths
+        self.domain_points = domain_points
+
+        domain_x, domain_y = self.domain()
 
         self.domain_brightness = fish.evaluate_interpolation(
             domain_x, domain_y, brightness_interpolation
@@ -67,12 +72,19 @@ class Blob(metaclass=abc.ABCMeta):
         return movies_dir / self.movie
 
     @property
+    def movie_stem(self):
+        return Path(self.movie).stem
+
+    @property
     def x(self):
         return self.centroid[0]
 
     @property
     def y(self):
         return self.centroid[1]
+
+    def distance_to(self, other: "Blob"):
+        return np.linalg.norm(self.centroid - other.centroid)
 
     @property
     @abc.abstractmethod
@@ -84,9 +96,13 @@ class Blob(metaclass=abc.ABCMeta):
     def v(self):
         raise NotImplementedError
 
-    def domain(self, widths, points=None):
+    def domain(self,):
         return fish.rotate_domain_xy(
-            *fish.domain(center=self.centroid, widths=widths, points=points),
+            *fish.domain(
+                center=self.centroid,
+                widths=self.domain_widths,
+                points=self.domain_points,
+            ),
             angle=self.angle,
         )
 

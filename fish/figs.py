@@ -33,6 +33,11 @@ def show_image(image):
     return
 
 
+def write_image(image, path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cv.imwrite(str(path), image)
+
+
 def color_labels(image, label_range, labels):
     show_markers = np.zeros_like(image)
 

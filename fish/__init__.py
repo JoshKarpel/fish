@@ -73,6 +73,7 @@ from .colors import (
 )
 from .figs import (
     show_image,
+    write_image,
     color_labels,
     overlay_image,
     draw_text,
