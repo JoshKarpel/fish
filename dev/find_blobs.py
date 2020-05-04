@@ -8,6 +8,7 @@ import numpy as np
 import cv2 as cv
 
 import fish
+import fish.io
 
 logging.basicConfig()
 
@@ -81,7 +82,7 @@ def find_blobs(movie_path, blobs_path):
 
         blobs_by_frame[frame_idx] = brightness_blobs + velocity_blobs
 
-    fish.save_blobs(blobs_path, blobs_by_frame)
+    fish.io.save_object(blobs_by_frame, blobs_path)
 
 
 if __name__ == "__main__":

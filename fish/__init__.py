@@ -3,7 +3,7 @@ import os as _os
 # see https://github.com/ContinuumIO/anaconda-issues/issues/905
 _os.environ["FOR_DISABLE_CONSOLE_CTRL_HANDLER"] = "1"
 
-from .io import read, save, load, cached_read, make_movie
+from .io import read, save, load, cached_read, make_movie, save_object, load_object
 from .bgnd import (
     train_background_subtractor,
     apply_background_subtraction,
@@ -46,8 +46,6 @@ from .blobs import (
     VelocityBlob,
     find_brightness_blobs,
     find_velocity_blobs,
-    save_blobs,
-    load_blobs,
     blobs_path,
 )
 from .hand import HandCounted, load_hand_counted_data

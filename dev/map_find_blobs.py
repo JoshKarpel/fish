@@ -12,6 +12,8 @@ import fish
 
 import htmap
 
+import fish.io
+
 FLOW_CLOSE_KERNEL_SIZE = 5
 FLOW_CLOSE_KERNEL = cv.getStructuringElement(
     cv.MORPH_ELLIPSE, (FLOW_CLOSE_KERNEL_SIZE, FLOW_CLOSE_KERNEL_SIZE)
@@ -34,7 +36,7 @@ def find_blobs(movie_name):
 
     blobs_file = Path.cwd() / Path(movie_name).with_suffix(".blobs")
     frame_to_blobs = dict(load_tmp_blobs(tmp))
-    fish.save_blobs(blobs_file, frame_to_blobs)
+    fish.io.save_object(frame_to_blobs, blobs_file)
     htmap.transfer_output_files(blobs_file)
 
     return movie_name

@@ -7,6 +7,7 @@ import htmap
 from tqdm import tqdm
 
 import fish
+import fish.io
 
 tag, target = sys.argv[1:]
 
@@ -16,4 +17,6 @@ export_dir = Path(target) / map.tag
 export_dir.mkdir(parents=True, exist_ok=True)
 
 for movie_name, blobs_by_frame in tqdm(map):
-    fish.save_blobs(export_dir / Path(movie_name).with_suffix(".blobs"), blobs_by_frame)
+    fish.io.save_object(
+        blobs_by_frame, export_dir / Path(movie_name).with_suffix(".blobs")
+    )

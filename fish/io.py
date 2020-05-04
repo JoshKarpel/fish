@@ -1,5 +1,7 @@
+import gzip
 import logging
-from typing import Optional
+import pickle
+from typing import Optional, Mapping, List, Any
 
 from pathlib import Path
 import os
@@ -7,6 +9,8 @@ import os
 import numpy as np
 import cv2 as cv
 from tqdm import tqdm
+
+from fish.blobs import Blob
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -116,3 +120,17 @@ def int_to_float(array):
 
 def float_to_int(array):
     return array.astype(np.uint8) * 8
+
+
+def save_object(object: Any, path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with gzip.open(path, mode="wb") as f:
+        pickle.dump(object, f)
+
+    return path
+
+
+def load_object(path: Path) -> Any:
+    with gzip.open(path, mode="rb") as f:
+        return pickle.load(f)

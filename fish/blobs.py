@@ -1,9 +1,5 @@
-from typing import List, Mapping
-
 import abc
-import pickle
 from pathlib import Path
-import gzip
 
 import cv2 as cv
 import numpy as np
@@ -34,11 +30,11 @@ class Blob(metaclass=abc.ABCMeta):
         points_in_label,
         area,
         centroid,
-        domain_widths=(30, 20),
-        domain_points=(30, 20),
         brightness_interpolation,
         velocity_x_interpolation,
         velocity_y_interpolation,
+        domain_widths=(30, 20),
+        domain_points=(30, 20),
     ):
         self.movie = movie
         self.frame_idx = frame_idx
@@ -304,18 +300,6 @@ def find_velocity_blobs(
         velocity_blobs.append(v)
 
     return velocity_blobs
-
-
-def save_blobs(path: Path, blobs: Mapping[int, List[Blob]]):
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    with gzip.open(path, mode="wb") as f:
-        pickle.dump(blobs, f)
-
-
-def load_blobs(path: Path) -> Mapping[int, List[Blob]]:
-    with gzip.open(path, mode="rb") as f:
-        return pickle.load(f)
 
 
 def blobs_path(movie_path: Path, out_dir: Path) -> Path:

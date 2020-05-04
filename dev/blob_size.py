@@ -5,8 +5,9 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 
 import fish
+import fish.io
 
-blobs = fish.load_blobs(Path("out") / "find_blobs" / "D1-1__frame=1000.blobs")
+blobs = fish.io.load_object(Path("out") / "find_blobs" / "D1-1__frame=1000.blobs")
 
 bb = blobs[0]
 bv = blobs[-1]
