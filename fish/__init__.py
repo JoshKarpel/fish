@@ -47,6 +47,7 @@ from .blobs import (
     find_brightness_blobs,
     find_velocity_blobs,
     blobs_path,
+    find_blobs_with_one_unit_rough,
 )
 from .hand import HandCounted, load_hand_counted_data
 from .domains import (
@@ -71,6 +72,7 @@ from .colors import (
 )
 from .figs import (
     show_image,
+    save_figure,
     write_image,
     color_labels,
     overlay_image,

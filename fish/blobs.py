@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2 as cv
 import numpy as np
+from scipy import stats
 from sklearn import decomposition as decomp
 
 import fish
@@ -33,8 +34,8 @@ class Blob(metaclass=abc.ABCMeta):
         brightness_interpolation,
         velocity_x_interpolation,
         velocity_y_interpolation,
-        domain_widths=(30, 20),
-        domain_points=(30, 20),
+        domain_widths=(35, 20),
+        domain_points=None,
     ):
         self.movie = movie
         self.frame_idx = frame_idx
@@ -91,6 +92,22 @@ class Blob(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def v(self):
         raise NotImplementedError
+
+    @property
+    def contour(self):
+        y, x = self.points_in_label
+
+        img = np.zeros((np.max(y) + 10, np.max(x) + 10), dtype=np.uint8)
+        img[self.points_in_label] = 1
+
+        contours, hierarchy = cv.findContours(
+            img, mode=cv.RETR_EXTERNAL, method=cv.CHAIN_APPROX_NONE
+        )
+        return contours[0]
+
+    @property
+    def perimeter(self):
+        return cv.arcLength(self.contour, closed=True)
 
     def domain(self,):
         return fish.rotate_domain_xy(
@@ -304,3 +321,23 @@ def find_velocity_blobs(
 
 def blobs_path(movie_path: Path, out_dir: Path) -> Path:
     return out_dir / f"{movie_path.stem}.blobs"
+
+
+def find_blobs_with_one_unit_rough(blobs, measure):
+    getter = lambda blob: getattr(blob, measure)
+
+    all_measures = np.array([getter(blob) for blob in blobs])
+
+    # for each measure, count up the number of blobs that have (roughly) that measure
+    num_matching_measure_ratios = {}
+    for blob in blobs:
+        ratios = all_measures / getter(blob)
+        rounded = np.rint(ratios)
+        num_matching_measure_ratios[blob] = np.count_nonzero(rounded == 1)
+
+    # assuming that most seeds are alone, the most common sum is the one where
+    # the measure we divided by was roughly the measure of a single seed
+    most_common_sum = stats.mode(list(num_matching_measure_ratios.values()))
+    mode = most_common_sum.mode[0]
+
+    return [blob for blob, sum in num_matching_measure_ratios.items() if sum == mode]

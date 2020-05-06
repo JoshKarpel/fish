@@ -33,6 +33,12 @@ def show_image(image):
     return
 
 
+def save_figure(figure, path):
+    figure.savefig(path)
+
+    return path
+
+
 def write_image(image, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     cv.imwrite(str(path), image)
